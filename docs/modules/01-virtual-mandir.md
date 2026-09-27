@@ -40,7 +40,7 @@ Layout, top to bottom (portrait only):
 | Garbhagriha | Layered deity scene (see §4.1), two hanging bells left/right | Tap bell → ring (§4.2). Long-press deity image → VM-04 Darshan chooser |
 | Tithi strip | "॥ मंगलवार, भाद्रपद कृष्ण पक्ष चतुर्थी ॥" | Phase 1: static text from API. Tap → no-op (Phase 2 opens Panchang) |
 | Offering rail (left, vertical) | Buttons: Phool, Mala, Diya, Bhog, Sangrah | Each opens VM-05 with that type |
-| Bottom center | Aarti thali | Tap → VM-06 Aarti mode |
+| Bottom center | Aarti thali (the user's selected thali design, §6.8) | Tap → VM-06 Aarti mode |
 | Bottom right | Deity-special offering badge (e.g. "सिंदूर चढ़ाएं" for Hanuman), "Listen" (music) button | Special → VM-05 filtered to `special`. Listen → play default aarti in background without entering aarti mode |
 | Feet area | Today's accumulated offerings (flowers pile, mala on deity, lit diya) | Derived from today's `ritual_logs`; resets at local midnight |
 
@@ -68,17 +68,18 @@ For the current deity, 3 tabs:
 Tap image → preview → "मंदिर में लगाएं" → sets `user_deities.selected_image_id`. Button "+ नई फ़ोटो जोड़ें" → VM-08. Each community image has "⋯" → Report (VM-11).
 
 ### VM-05 Offering sheet (bottom sheet, one component for all types)
-Props: `type` (FLOWER | MALA | DIYA | BHOG | SPECIAL). Shows `offering_items` for the current deity and type: image, name, coin cost or "निःशुल्क". Locked items show coin cost. Tap:
+Props: `type` (FLOWER | MALA | DIYA | BHOG | SPECIAL). Shows `offering_items` for the current deity and type: image, name, coin cost or "निःशुल्क". Every kind has at least one free basic item; coins are only for premium (special) items, which show their coin cost. Tap:
 - free → play animation immediately, log in background;
 - paid & enough coins → call API, on success play animation;
 - paid & not enough → VM-07 coin packs with "आपको X सिक्के और चाहिए".
 
-Free items have a daily limit per deity (config, default 3) to keep value in premium items.
+Free offerings are **unlimited** (no daily limit). Only a technical throttle applies (§6.5); on 429 the app skips the log silently and keeps the animation. Rewards stay capped (§6.4), so repeated free offerings earn nothing extra.
 
 ### VM-06 Aarti mode (full-screen overlay on VM-01)
 - Aarti selector (if deity has >1 aarti), play/pause, progress.
 - Lyrics panel: 3 visible lines, current line highlighted, auto-scroll.
 - Thali: drag in a circle, or "स्वतः" (Auto) toggle.
+- Thali picker (with `mandir.thali_designs`, §6.8): horizontal strip of thali designs. Unlocked designs can be selected (`PUT /mandir/thali`). Locked designs show a lock + coin cost; tapping one opens an "अनलॉक करें — X सिक्के" confirm sheet (`POST /mandir/thalis/:id/unlock`), or VM-07 if coins are short. Selection persists across sessions and devices.
 - Bell + shankh buttons usable during aarti.
 - Close (X) → confirm if aarti not finished. Audio continues in background if user leaves the app.
 - On completion (≥ 90% of audio played **and** thali moved ≥ 3 full circles, or Auto on): "आरती सम्पन्न 🙏" overlay, streak update, reward toast, "दर्शन शेयर करें" → VM-12.
@@ -415,6 +416,48 @@ model RewardRule {
 }
 ```
 
+**Thali designs and permanent unlocks (T7b — documented, not yet in the schema):**
+
+```prisma
+enum UnlockItemType { THALI }        // later: BELL, FRAME … (one enum value + migration per new item type)
+// CoinTxnReason gains UNLOCK        // spend on a permanent unlock (refType "unlock", refId = UserUnlock.id)
+
+model ThaliDesign {
+  id         String   @id @default(uuid())
+  nameHi     String
+  nameEn     String
+  imageKey   String              // public-bucket object key (like OfferingItem.iconUrl)
+  flameStyle String              // "single" | "pancha" | … — flame layout/animation preset for §4.3
+  coinCost   Int      @default(0) // 0 = free (always usable, never needs an unlock row)
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Generic "bought once, usable forever" ownership. `itemId` points into the table named by `itemType`
+/// (no FK, so one table serves every item type); rows are never deleted when an item is deactivated.
+model UserUnlock {
+  id         String         @id @default(uuid())
+  userId     String
+  itemType   UnlockItemType
+  itemId     String
+  coinsSpent Int
+  unlockedAt DateTime       @default(now())
+  @@unique([userId, itemType, itemId])
+  @@index([userId, itemType])
+}
+
+/// Per-user mandir settings (one row per user, created on first write).
+model UserMandirSettings {
+  userId          String   @id
+  selectedThaliId String?  // null = the default free thali
+  updatedAt       DateTime @updatedAt
+}
+
+// RitualLog gains: thaliId String?   // thali used for AARTI_COMPLETE
+```
+
 Implementation notes (T2 — the Prisma schema adds these on top of the listing above, fields/types unchanged):
 - Foundation conventions: tables and columns are snake_case (`@@map` / `@map`), all uuid ids and uuid references are `@db.Uuid`.
 - Foreign keys follow `docs/02-database-overview.md` → Relationship rules: user-owned rows (`user_deities`, `ritual_logs`, `user_streaks`, `user_badges`, `coin_wallets`, `image_reports`) reference `users` with `ON DELETE CASCADE`; `deity_images.uploaded_by_id` and `temples.created_by_id` use `SET NULL` (approved public photos survive account deletion, anonymised); audit/financial rows (`coin_transactions`, `coin_purchases`, `moderation_logs.actor_id`) keep a plain uuid with no FK.
@@ -463,13 +506,23 @@ A "darshan day" = the user completed at least one of: an offering, an aarti, (co
 | WELCOME_BONUS | 10 | once |
 
 ### 6.5 Offering limits
-Free items: `freeOfferingsPerDeityPerDay` (remote config, default 3). Paid items: no limit. Offering valid only if item active and (item has no deity list or deity is in it).
+Free items: **unlimited**. Paid items: no limit, each costs its `coinCost`; coins are only for premium items, and every kind has at least one free basic item. Offering valid only if item active and (item has no deity list or deity is in it).
+
+Abuse protection is technical only: `POST /mandir/offerings` is throttled to **60 requests/minute per user** (429 `RATE_LIMITED`). Rewards stay capped per §6.4 (e.g. FIRST_DARSHAN_OF_DAY 1/day), so repeated free offerings cannot farm coins.
 
 ### 6.6 Uploads
 Rate limit 10 uploads/user/day. Max original size 15 MB. Allowed: JPEG, PNG, HEIC (convert to JPEG on device). Users with 3+ rejected-as-inappropriate uploads are auto-blocked from uploading (admin can unblock).
 
 ### 6.7 Content licence
 Terms of Use must state: uploader confirms they own the photo; grants the app a non-exclusive, worldwide, royalty-free licence to display, resize and distribute it within the app and its promotions; can delete it anytime (removal from public within 72 h). A takedown contact email must exist. **Get this clause reviewed by a lawyer before launch.**
+
+### 6.8 Thali designs (permanent unlocks, T7b)
+- A thali design is **bought once and usable forever**, unlike offerings, which are spent each time. `coinCost = 0` designs are free and usable by everyone with no unlock row. The free default thali is the active free design with the lowest `sortOrder`.
+- Unlock = one transaction: lock the user (§5 rules), check no `UserUnlock` row exists, debit `coinCost` (`reason UNLOCK`, `refType "unlock"`, `refId` = unlock id), insert `UserUnlock`. Already unlocked (or free) → 409 `ALREADY_UNLOCKED`, no debit. The unique `(userId, itemType, itemId)` constraint is the last line of defence against a double debit.
+- A thali can be selected only if it is active **and** (free or unlocked by the user); otherwise 403 `THALI_LOCKED`. Unlocking does not auto-select.
+- If the selected thali is deactivated by admin, the user falls back to the default free thali (the unlock row is kept; reactivating restores access).
+- Prices are admin-editable; a price change never affects existing unlocks. Refunds go through admin coin adjust (`ADMIN_ADJUST`) and do not remove the unlock unless admin revokes it explicitly.
+- `UserUnlock` is generic (`itemType`): later permanent items (bell designs, mandir frames …) reuse the same table, rules and endpoints shape.
 
 ---
 
@@ -484,10 +537,13 @@ All under `/v1`, auth required unless noted. Schemas live in `packages/shared-ty
 | GET | `/deities` | | All active deities (for Sangrah) |
 | PUT | `/mandir/deities` | | Replace user's deity list `{ items: [{ deityId, position, isPinned }] }` |
 | PUT | `/mandir/deities/:deityId/image` | | `{ imageId: string \| null }` (null = reset to default) |
-| GET | `/deities/:deityId/offerings` | | Items valid for deity, grouped by kind |
-| POST | `/mandir/offerings` | `mandir.offerings` (paid items also need `mandir.premium_offerings`) | Idempotency-Key required |
+| GET | `/deities/:deityId/offerings` | `mandir.offerings` | Items valid for deity, grouped by kind |
+| POST | `/mandir/offerings` | `mandir.offerings` (paid items also need `mandir.premium_offerings`) | Idempotency-Key required. Throttle 60/min per user |
 | GET | `/deities/:deityId/aartis` | | With signed/CDN URLs + version |
-| POST | `/mandir/rituals/aarti-complete` | | `{ deityId, aartiId, playedRatio, circles }` |
+| POST | `/mandir/rituals/aarti-complete` | | `{ deityId, aartiId, playedRatio, circles, thaliId? }` (`thaliId` from T7b) |
+| GET | `/mandir/thalis` | `mandir.thali_designs` | T7b. All active designs with `unlocked` + `selected` flags |
+| POST | `/mandir/thalis/:thaliId/unlock` | `mandir.thali_designs` | T7b. Idempotency-Key required. Debits coins once; 409 `ALREADY_UNLOCKED` |
+| PUT | `/mandir/thali` | `mandir.thali_designs` | T7b. `{ thaliId }` — select an unlocked (or free) design; 403 `THALI_LOCKED` |
 | POST | `/mandir/rituals/darshan` | | Presence ping for streak (≥20 s) |
 | GET | `/me/streak` | | Streak + badges + month calendar |
 
@@ -507,8 +563,7 @@ All under `/v1`, auth required unless noted. Schemas live in `packages/shared-ty
     }],
     "todayOfferings": { "<deityId>": { "flowers": 14, "mala": true, "diya": true, "bhog": false } },
     "coins": { "balance": 42 },
-    "streak": { "current": 5, "longest": 12, "doneToday": true },
-    "limits": { "freeOfferingsPerDeityPerDay": 3 }
+    "streak": { "current": 5, "longest": 12, "doneToday": true }
   }
 }
 ```
@@ -532,8 +587,31 @@ T4 contract notes (zod schemas in `packages/shared-types/src/mandir/home.ts`):
 { "data": { "coinsBalance": 37, "coinsSpent": 5, "streak": { "current": 6, "doneToday": true },
             "reward": { "ruleKey": "FIRST_DARSHAN_OF_DAY", "coins": 1 } | null,
             "todayOfferings": { "flowers": 25, "mala": true, "diya": true, "bhog": false } } }
-// errors: 402 COINS_INSUFFICIENT { details: { required: 5, balance: 2 } }, 409 FREE_LIMIT_REACHED, 404 ITEM_NOT_AVAILABLE
+// errors: 402 COINS_INSUFFICIENT { details: { required: 5, balance: 2 } }, 404 ITEM_NOT_AVAILABLE, 429 RATE_LIMITED
 ```
+
+T6 contract notes (zod schemas in `packages/shared-types/src/mandir/offerings.ts`):
+- `GET /deities/:deityId/offerings` → `{ deityId, groups: [{ kind, items: [{ id, kind, nameHi, nameEn, iconUrl, spriteUrl, animationKey, particleCount, coinCost }] }] }`. Kinds in order FLOWER, MALA, DIYA, BHOG, SPECIAL; empty kinds omitted. Paid items are left out while `mandir.premium_offerings` is off. Unknown/inactive deity → 404 `DEITY_NOT_AVAILABLE`.
+- `POST /mandir/offerings` answers **200**. The deity must be active (it need not be in the user's mandir list). A paid item while `mandir.premium_offerings` is off → 403 `FEATURE_DISABLED { flag }`.
+- No free-offering limit (§6.5). Throttle: 60 requests/minute per user (`@UserThrottle`, `core/throttle`, counted after auth by user id, in the throttler's storage), on top of the global per-IP default. Over the limit → 429 `RATE_LIMITED` with a `Retry-After` header; nothing is written.
+- One transaction: coin debit (ledger `refType "offering"`, `refId` = ritual log id) → `RitualLog` → streak update (§6.3) → `FIRST_DARSHAN_OF_DAY` reward (if `mandir.rewards` on). Any error rolls everything back. A per-user Postgres advisory lock, taken first, serialises reward-cap and streak checks and keeps the lock order (user lock → wallet row) the same everywhere.
+- `coinsBalance` is after the spend and reward; `reward` is null when nothing paid out. Streak-milestone rewards (STREAK_7…) and badges come with T7.
+
+Thali contract (T7b, rules §6.8; schemas will live in `packages/shared-types/src/mandir/thalis.ts`):
+```json
+// GET /v1/mandir/thalis → 200
+{ "data": { "selectedThaliId": "…",
+            "items": [{ "id": "…", "nameHi": "चाँदी की थाली", "nameEn": "Silver thali", "imageUrl": "…",
+                        "flameStyle": "single", "coinCost": 51, "unlocked": false, "selected": false }] } }
+// POST /v1/mandir/thalis/:thaliId/unlock (Idempotency-Key) → 200
+{ "data": { "thaliId": "…", "coinsSpent": 51, "coinsBalance": 12 } }
+// errors: 409 ALREADY_UNLOCKED (also for free designs), 402 COINS_INSUFFICIENT { required, balance }, 404 THALI_NOT_AVAILABLE (unknown/inactive)
+// PUT /v1/mandir/thali { "thaliId": "…" } → 200 { "data": { "selectedThaliId": "…" } }
+// errors: 403 THALI_LOCKED, 404 THALI_NOT_AVAILABLE
+```
+- Items sorted by `sortOrder`; free designs always have `unlocked: true`. `selectedThaliId` is the resolved selection (falls back to the default free thali, §6.8).
+- `aarti-complete` records `RitualLog.thaliId`: the request's `thaliId` if given and usable by the user (else 403 `THALI_LOCKED`), otherwise the user's resolved selection.
+- `GET /mandir/home` gains `thali: { id, imageUrl, flameStyle }` (the resolved selection) so VM-01 can draw it without a second call.
 
 ### Images
 | Method | Path | Flag | Notes |
@@ -564,7 +642,7 @@ T5 contract notes (zod schemas in `packages/shared-types/src/coins/index.ts`):
 App purchase flow: RevenueCat `purchasePackage` → on success poll `GET /coins/wallet` (max 10 s, backoff) until balance increases → show success. The app **never** credits coins itself.
 
 ### Config
-`GET /v1/config` (Foundation) returns flags and remote config including `freeOfferingsPerDeityPerDay`, `uploadMaxPerDay`, `shareAppLink`.
+`GET /v1/config` (Foundation) returns flags and remote config including `uploadMaxPerDay`, `shareAppLink`. (`freeOfferingsPerDeityPerDay` was removed; free offerings are unlimited, §6.5. The seed deletes the obsolete key from existing configs.)
 
 ---
 
@@ -600,6 +678,7 @@ Every transition writes `ModerationLog`. Transitions are implemented in one `Ima
 | `mandir.share_card` | on | share card |
 | `mandir.festival_themes` | off | theme switching |
 | `mandir.startup_shankh_sound` | on | shankh on first open of day |
+| `mandir.thali_designs` | on (seeded **off** until T7b ships) | thali picker, unlock + select APIs (§6.8) |
 
 ---
 
@@ -617,6 +696,7 @@ Every transition writes `ModerationLog`. Transitions are implemented in one `Ima
 | Temples | CRUD, verify user-suggested temples, merge duplicates, `photographyRestricted` toggle (also offers "remove all public photos of this temple") |
 | Users (basic) | Search user, view uploads, block/unblock uploads, adjust coins (with reason → ADMIN_ADJUST) |
 | Offerings | CRUD items, kind, cost, deity scope, sprites, animation key |
+| Thali designs | CRUD `ThaliDesign`: names, image upload, flame style, coin cost (0 = free), active toggle, sort order; unlock count per design. Deactivate instead of delete once anyone has unlocked it |
 | Aartis | Upload audio + lyrics JSON, preview with synced lyrics, set default, licence info |
 | Coins | Packs (map to store product ids), reward rules |
 | Themes | Create/schedule festival themes |
@@ -627,7 +707,7 @@ Every transition writes `ModerationLog`. Transitions are implemented in one `Ima
 
 ## 11. Analytics events
 
-`mandir_opened`, `deity_switched {deityId, via}`, `bell_rung`, `offering_sheet_opened {kind}`, `offering_made {itemId, kind, coins}`, `offering_blocked {reason}`, `aarti_started {aartiId}`, `aarti_completed {aartiId, circles, auto}`, `aarti_abandoned {playedRatio}`, `coin_pack_viewed`, `coin_purchase_started {packId}`, `coin_purchase_succeeded`, `coin_purchase_failed {reason}`, `darshan_chooser_opened`, `image_selected {source}`, `upload_started {source}`, `upload_submitted`, `upload_failed {reason}`, `image_reported {reason}`, `share_card_shared`, `streak_badge_earned {badge}`.
+`mandir_opened`, `deity_switched {deityId, via}`, `bell_rung`, `offering_sheet_opened {kind}`, `offering_made {itemId, kind, coins}`, `offering_blocked {reason}`, `aarti_started {aartiId}`, `aarti_completed {aartiId, circles, auto}`, `aarti_abandoned {playedRatio}`, `coin_pack_viewed`, `coin_purchase_started {packId}`, `coin_purchase_succeeded`, `coin_purchase_failed {reason}`, `darshan_chooser_opened`, `image_selected {source}`, `upload_started {source}`, `upload_submitted`, `upload_failed {reason}`, `image_reported {reason}`, `share_card_shared`, `streak_badge_earned {badge}`, `thali_picker_opened`, `thali_unlocked {thaliId, coins}`, `thali_selected {thaliId}`.
 
 ---
 
@@ -639,11 +719,27 @@ Every transition writes `ModerationLog`. Transitions are implemented in one `Ima
 | Frame (default theme) | Transparent PNG arch + pillars + toran, 1440×2560 | 1 |
 | Bells | Sprite PNG + bell sound (short, clean) | 1 + 2 sounds |
 | Shankh sound | ≤3 s | 1 |
-| Offering sprites | Flowers (genda, gulab, kamal), mala, diya, bhog thali, sindoor | ~10 |
+| Offering sprites (free basics) | Genda phool, genda mala, mitti diya, mishri bhog, deity specials (sindoor/Hanuman, jal/Shiv, tel/Shani) | 7 |
+| Offering sprites (premium) | Gulab, kamal, 108 phool varsha, gulab mala, pancha-deep, chhappan bhog, chandan, chunari (Durga/Lakshmi) | 8 |
+| Thali designs (T7b) | Top-down transparent PNG/WebP, 512×512, with flame anchor points per `flameStyle`: 1 free default (pital/brass) + 3 premium (chaandi, sone ki, pancha-deep thali) | 4 |
 | Aarti audio | 1 per deity (licensed recordings — traditional lyrics are old, but recordings have copyright) + lyrics timeline JSON | 10 |
 | Fallback | 1 generic bundled artwork + bell sound | bundled |
 
 Seed deities: Ganesh, Shiv, Hanuman, Vishnu, Lakshmi, Durga, Krishna, Ram, Shani, Surya.
+
+Seed offerings: every kind has at least one free basic item, and coins are only for premium items. **Coin costs are placeholders**, to be set by the owner in admin.
+
+| Kind | Free basic | Premium (placeholder coins) |
+|---|---|---|
+| FLOWER | Genda phool | Gulab (5), Kamal (11), 108 phool varsha (21) |
+| MALA | Genda mala | Gulab mala (11) |
+| DIYA | Mitti diya | Pancha-deep (11) |
+| BHOG | Mishri bhog | Chhappan bhog (21) |
+| SPECIAL | Sindoor (Hanuman), Jal abhishek (Shiv), Sarson tel (Shani) | Chandan (5, all deities), Chunari (21, Durga + Lakshmi) |
+
+New animation keys for T12: `phool_varsha` (dense shower, still ≤ 30 particles), `pancha_deep`, `chandan_tilak`, `chunari_drape`. Earlier seeds also created Ghee diya and Laddoo bhog; the seed now deactivates them (past ritual logs keep their reference).
+
+Seed thalis (T7b): Pital ki thali (free default), Chaandi ki thali, Sone ki thali, Pancha-deep thali (premium, placeholder costs 51 / 108 / 151).
 
 ---
 
@@ -665,26 +761,29 @@ Each task: implement → tests → lint/typecheck → verify acceptance criteria
 - [x] **T1 Module scaffolding** — `mandir`, `coins`, `images`, `streaks` NestJS modules + shared-types folders + app `features/` folders. *AC:* app and API compile; routes registered under `/v1`.
 - [x] **T2 Prisma schema + migration** — all models in §5. *AC:* `pnpm db:migrate` succeeds; schema matches doc.
 - [x] **T3 Seed** — 10 deities (weekday map), 10 temples, placeholder official images (use bundled sample images uploaded to the local `media-public` bucket), offering items (free + paid per kind, sindoor for Hanuman, jal for Shiv, tel for Shani), 1 aarti per deity (placeholder audio + lyrics JSON), 4 coin packs, reward rules, flags, default theme, dev-user with 50 coins. *AC:* `pnpm db:seed` idempotent.
-  - Notes: seeded rows use fixed ids and are **create-only** — re-running never overwrites admin edits or the dev-user's spent coins (`prisma migrate reset` for a clean slate). Remote config gets `freeOfferingsPerDeityPerDay: 3`, `uploadMaxPerDay: 10`, `shareAppLink: null` merged in only where the key is missing. Placeholder media is generated by the seed with `sharp` (no binaries in git) and uploaded to `media-public`: deity images (`official/<slug>/<imageId>/{original.png,thumb,card,full,hd}.webp`, marked PLACEHOLDER in `licenseInfo`), offering icons/sprites, default theme frame, aarti audio as a short **WAV** tone (`audio/aarti/<slug>/v1.wav`; real recordings are AAC/M4A) and lyrics timelines (`lyrics/aarti/<slug>/v1.json`). All must be replaced with licensed assets per §12 before launch.
+  - Notes: seeded rows use fixed ids and are **create-only** — re-running never overwrites admin edits or the dev-user's spent coins (`prisma migrate reset` for a clean slate). Remote config gets `uploadMaxPerDay: 10`, `shareAppLink: null` merged in only where the key is missing (`freeOfferingsPerDeityPerDay` was dropped by the T6 revision and is removed from existing configs). Placeholder media is generated by the seed with `sharp` (no binaries in git) and uploaded to `media-public`: deity images (`official/<slug>/<imageId>/{original.png,thumb,card,full,hd}.webp`, marked PLACEHOLDER in `licenseInfo`), offering icons/sprites, default theme frame, aarti audio as a short **WAV** tone (`audio/aarti/<slug>/v1.wav`; real recordings are AAC/M4A) and lyrics timelines (`lyrics/aarti/<slug>/v1.json`). All must be replaced with licensed assets per §12 before launch.
 - [x] **T4 Home + deities APIs** — `/mandir/home`, `/deities`, `/mandir/deities`, `/mandir/deities/:id/image`, image resolution rules §6.2. *AC:* e2e tests for default deity logic and image fallback.
   - Notes: contract details under §7 "T4 contract notes"; §6.1 clarified (festival theme override, implicit default list). Visibility/resolution live in `ImagesService` (`image-visibility.ts`), balance in `CoinsService.getBalance`, streak display in `StreaksService.summary`. Tests: `apps/api/test/mandir-home.e2e-spec.ts` + unit specs for default deity, visibility, tithi and local dates.
 - [x] **T5 Coin wallet core** — wallet service with transactional credit/debit, idempotency interceptor, transactions API. *AC:* concurrent debit test cannot go negative; repeated Idempotency-Key returns same response.
   - Notes: `CoinsService.credit/debit(userId, amount, { reason, refType?, refId? }, tx?)` lock the wallet row (`SELECT … FOR UPDATE`; first credit creates it with `ON CONFLICT DO NOTHING`), update it and insert the ledger row; passing `tx` joins the caller's transaction (T6 offering + reward). The idempotency interceptor is the Foundation one (`core/idempotency`, Redis, `@Idempotent()`); failed requests (e.g. 402) are not stored and can be retried with the same key. Contract under §7 "T5 contract notes". Tests: `apps/api/test/coins-wallet.e2e-spec.ts` (concurrent debits/credits, rollback, idempotent replay via a test-only spend route) + cursor unit spec.
-- [ ] **T6 Offerings API** — `/deities/:id/offerings`, `POST /mandir/offerings` incl. free daily limit, streak update, reward evaluation. *AC:* e2e for free, paid, insufficient, limit reached, reward granted once.
+- [x] **T6 Offerings API** — `/deities/:id/offerings`, `POST /mandir/offerings` incl. per-user throttle (free offerings unlimited, §6.5), streak update, reward evaluation. *AC:* e2e for free, paid, insufficient, unlimited free + throttle, reward granted once.
+  - Revised 2026-09-27 (owner): the free daily limit (`freeOfferingsPerDeityPerDay`, `FREE_LIMIT_REACHED`, `limits` in home/offerings responses) was removed in favour of a 60/min per-user throttle. Seed offerings reworked per §12.
+  - Notes: contract under §7 "T6 contract notes". Reward evaluation is `RewardsService.grant(tx, userId, ruleKey, { localDate, timezone })` (coins module): a rule with `dailyCap` pays at most that many times per local day, one without pays once per user; payouts are ledger rows (`REWARD`, `refType "reward_rule"`, `refId` = rule key), which the caps count. Per-image "once" (IMAGE_USED_BY_10) is left to T16. `StreaksService.recordDarshanDay(tx, …)` applies §6.3 (`nextStreak`, a `lastDate` after today is left as is). `core/prisma/user-lock.ts` `lockUser(tx, userId)` = per-user advisory lock, always taken before the wallet row lock. Tests: `apps/api/test/mandir-offerings.e2e-spec.ts` (free, paid, insufficient + rollback, unlimited free offerings, reward once incl. concurrency, flags, idempotent replay), `apps/api/test/mandir-offerings-throttle.e2e-spec.ts` (61st request in a minute → 429, other users unaffected) + `nextStreak` unit spec.
 - [ ] **T7 Aarti + rituals APIs** — aarti list with URLs, aarti-complete, darshan ping, `/me/streak`, badges. *AC:* streak unit tests incl. timezone boundary.
+- [ ] **T7b Thali designs and permanent unlocks** — §5 thali block (`ThaliDesign`, generic `UserUnlock`, `UserMandirSettings.selectedThaliId`, `RitualLog.thaliId`, `CoinTxnReason.UNLOCK`) + migration; seed 1 free default + 3 premium thalis and the `mandir.thali_designs` flag (off); `GET /mandir/thalis`, `POST /mandir/thalis/:id/unlock`, `PUT /mandir/thali`; aarti-complete records `thaliId`; `thali` in home payload; rules §6.8. *AC:* unlock debits coins exactly once (incl. concurrent + repeated Idempotency-Key); duplicate unlock returns 409 `ALREADY_UNLOCKED`; a locked thali cannot be selected (403 `THALI_LOCKED`).
 - [ ] **T8 App shell** — providers, API client, config fetch + flags hook, theme, i18n (hi default), fonts, tab layout (Mandir + Profile only). *AC:* dev build runs on Android + iOS.
 - [ ] **T9 VM-01 static layout** — zones, layered scene, carousel, coin pill, tithi strip, loading/offline/error states, fallback image. *AC:* matches layout on small (360dp) and large phones.
 - [ ] **T10 Deity switching + Sangrah (VM-02, VM-03)** — incl. reorder, pin, persist. *AC:* choice persists across app restarts via API.
 - [ ] **T11 Bells** — §4.2. *AC:* no audio lag on low-end Android; haptics work.
 - [ ] **T12 Offering sheets + animations (VM-05, §4.4)** — Skia particles, mala anchor, diya, pile stages, coins update, insufficient → VM-07. *AC:* 60 fps with 30 particles on a low-end test device.
-- [ ] **T13 Aarti mode (VM-06, §4.3, §4.5)** — manual/auto thali, circle counting, audio, lyrics sync, background + lock-screen, completion. *AC:* completion rules enforced; audio continues when screen locks.
+- [ ] **T13 Aarti mode (VM-06, §4.3, §4.5)** — manual/auto thali, thali picker with locked designs + unlock (§6.8, needs T7b), circle counting, audio, lyrics sync, background + lock-screen, completion. *AC:* completion rules enforced; audio continues when screen locks.
 - [ ] **T14 Offline cache** — images + aarti audio/lyrics cached; offline states. *AC:* airplane mode: darshan, bells, free offerings (queued) and cached aarti work.
 - [ ] **T15 Coins purchase (VM-07)** — RevenueCat SDK, packs screen, webhook endpoint, polling, history, reward rules list. *AC:* sandbox purchase on both stores credits coins exactly once; duplicate webhook ignored.
 - [ ] **T16 Image upload pipeline (API)** — upload-url, submit, BullMQ `image.process` (sharp variants, pHash, ModerationProvider with a `mock` provider for local), state machine + logs, rate limits, temple search/create. *AC:* state machine tests pass; unsafe mock image → AUTO_REJECTED.
 - [ ] **T17 Upload flow in app (VM-08, VM-14)** — permissions, crop with arch overlay, size checks, details, consent, progress, success. *AC:* uploaded image immediately usable in own mandir.
 - [ ] **T18 Darshan chooser, gallery, my uploads, report (VM-04, VM-09, VM-10, VM-11)**. *AC:* visibility table §6.2 verified with two test users.
 - [ ] **T19 Streak screen + share card (VM-12, VM-13)**. *AC:* share card renders correctly in Hindi and shares to WhatsApp.
-- [ ] **T20 Admin: content** — deities, official images (anchor picker), offerings, aartis (lyrics preview), coin packs, reward rules, themes, flags. *AC:* changes reflect in app without app update.
+- [ ] **T20 Admin: content** — deities, official images (anchor picker), offerings, thali designs, aartis (lyrics preview), coin packs, reward rules, themes, flags. *AC:* changes reflect in app without app update.
 - [ ] **T21 Admin: moderation** — queue with shortcuts + duplicate comparison, reports, all images, temples (restrict + bulk remove), users (block uploads, adjust coins), moderation log, dashboard. *AC:* approve → image appears in community tab for another user within 1 minute; uploader gets coins.
 - [ ] **T22 Analytics events** — all §11 events wired. *AC:* events visible in debug logger.
 - [ ] **T23 Hardening** — rate limits, error states copy (Hindi), accessibility labels, reduce-motion, low-end device perf pass. *AC:* checklist §15 passes.

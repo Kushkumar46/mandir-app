@@ -19,3 +19,20 @@ export function streakSummary(
   const alive = doneToday || row.lastDate === addDays(localDate, -1);
   return { current: alive ? row.current : 0, longest: row.longest, doneToday };
 }
+
+export interface StreakRow {
+  current: number;
+  longest: number;
+  lastDate: string | null;
+}
+
+/**
+ * §6.3 update for a darshan day on `localDate`: same day → unchanged; the day after `lastDate` →
+ * +1; otherwise a new streak of 1. A `lastDate` after `localDate` (user moved timezone west) is
+ * left as is rather than counted twice.
+ */
+export function nextStreak(row: StreakRow | null, localDate: string): StreakRow {
+  if (row?.lastDate && row.lastDate >= localDate) return row;
+  const current = row?.lastDate === addDays(localDate, -1) ? row.current + 1 : 1;
+  return { current, longest: Math.max(row?.longest ?? 0, current), lastDate: localDate };
+}

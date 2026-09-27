@@ -16,6 +16,8 @@ Purpose: a map of every table so modules don't collide. Full column definitions 
 
 `deities`, `temples`, `deity_images`, `image_reports`, `moderation_logs`, `offering_items`, `offering_item_deities`, `aartis`, `user_deities`, `ritual_logs`, `user_streaks`, `user_badges`, `themes` (offering kind is an enum, not a table)
 
+Planned (T7b): `thali_designs`, `user_unlocks` (generic permanent purchases: `item_type` THALI now, later bells/frames …), `user_mandir_settings` (`selected_thali_id`)
+
 ## Coins (Phase 1)
 
 `coin_wallets`, `coin_transactions`, `coin_packs`, `coin_purchases`, `reward_rules`

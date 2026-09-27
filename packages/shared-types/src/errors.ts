@@ -28,6 +28,8 @@ export const ErrorCode = {
   DEITY_NOT_IN_MANDIR: 'DEITY_NOT_IN_MANDIR',
   /** Image unknown, of another deity, or not visible to the user (§6.2). */
   IMAGE_NOT_AVAILABLE: 'IMAGE_NOT_AVAILABLE',
+  /** 404 — offering item unknown, inactive or not offered to this deity (§6.5). */
+  ITEM_NOT_AVAILABLE: 'ITEM_NOT_AVAILABLE',
 
   // Coins
   /** 402 — balance too low; `details: { required, balance }`. */

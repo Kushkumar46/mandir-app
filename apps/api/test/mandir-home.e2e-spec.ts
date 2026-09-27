@@ -207,7 +207,7 @@ describe('Mandir home + deities (e2e)', () => {
   });
 
   describe('home payload', () => {
-    it('returns theme, coins, streak, limits, special offering, aarti and today offerings', async () => {
+    it('returns theme, coins, streak, special offering, aarti and today offerings (no free-offering limits)', async () => {
       const userId = await newUser();
       const hanuman = deity('hanuman');
       const flower = await prisma.offeringItem.findFirstOrThrow({ where: { kind: 'FLOWER', coinCost: 0 } });
@@ -227,7 +227,7 @@ describe('Mandir home + deities (e2e)', () => {
       expect(h.theme).toMatchObject({ key: 'default', frameUrl: expect.stringContaining('themes/default/') });
       expect(h.coins).toEqual({ balance: 0 });
       expect(h.streak).toEqual({ current: 0, longest: 0, doneToday: false });
-      expect(h.limits.freeOfferingsPerDeityPerDay).toBeGreaterThanOrEqual(0);
+      expect(h).not.toHaveProperty('limits');
       expect(Object.keys(h.todayOfferings).sort()).toEqual(h.deities.map((d) => d.id).sort());
       expect(h.todayOfferings[hanuman.id]).toEqual({ flowers: 2, mala: false, diya: true, bhog: false });
       expect(h.todayOfferings[deity('shiv').id]).toEqual({ flowers: 0, mala: false, diya: false, bhog: false });

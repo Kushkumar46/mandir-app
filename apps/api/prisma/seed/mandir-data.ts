@@ -136,21 +136,32 @@ export interface SeedOffering {
   color: string;
 }
 
-/** Free + paid per kind, plus deity-specific specials (sindoor/Hanuman, jal/Shiv, tel/Shani). */
+/**
+ * §12 seed offerings: every kind has at least one free basic item; coins are only for premium items.
+ * Coin costs are placeholders (set in admin). Particle counts stay ≤ 30 (§4.6 budget).
+ */
 export const OFFERINGS: SeedOffering[] = [
+  // Free basics
   { key: 'genda', kind: 'FLOWER', nameHi: 'गेंदा फूल', nameEn: 'Marigold', animationKey: 'falling_flowers', particleCount: 20, coinCost: 0, deities: [], color: '#FFA000' },
-  { key: 'gulab', kind: 'FLOWER', nameHi: 'गुलाब', nameEn: 'Rose', animationKey: 'falling_flowers', particleCount: 25, coinCost: 5, deities: [], color: '#D81B60' },
-  { key: 'kamal', kind: 'FLOWER', nameHi: 'कमल', nameEn: 'Lotus', animationKey: 'falling_flowers', particleCount: 12, coinCost: 11, deities: [], color: '#F48FB1' },
   { key: 'genda-mala', kind: 'MALA', nameHi: 'गेंदे की माला', nameEn: 'Marigold garland', animationKey: 'mala_drop', particleCount: 1, coinCost: 0, deities: [], color: '#FB8C00' },
-  { key: 'gulab-mala', kind: 'MALA', nameHi: 'गुलाब की माला', nameEn: 'Rose garland', animationKey: 'mala_drop', particleCount: 1, coinCost: 11, deities: [], color: '#C2185B' },
   { key: 'mitti-diya', kind: 'DIYA', nameHi: 'मिट्टी का दीया', nameEn: 'Clay diya', animationKey: 'diya_light', particleCount: 1, coinCost: 0, deities: [], color: '#A1662F' },
-  { key: 'ghee-diya', kind: 'DIYA', nameHi: 'घी का दीपक', nameEn: 'Ghee lamp', animationKey: 'diya_light', particleCount: 1, coinCost: 5, deities: [], color: '#D4A537' },
   { key: 'mishri', kind: 'BHOG', nameHi: 'मिश्री भोग', nameEn: 'Mishri bhog', animationKey: 'bhog_place', particleCount: 1, coinCost: 0, deities: [], color: '#F5F5F5' },
-  { key: 'laddoo', kind: 'BHOG', nameHi: 'लड्डू भोग', nameEn: 'Laddoo bhog', animationKey: 'bhog_place', particleCount: 1, coinCost: 11, deities: [], color: '#FFB300' },
   { key: 'sindoor', kind: 'SPECIAL', nameHi: 'सिंदूर', nameEn: 'Sindoor', animationKey: 'sindoor_tilak', particleCount: 1, coinCost: 0, deities: ['hanuman'], color: '#E53935' },
   { key: 'jal', kind: 'SPECIAL', nameHi: 'जल अभिषेक', nameEn: 'Jal abhishek', animationKey: 'jal_abhishek', particleCount: 15, coinCost: 0, deities: ['shiv'], color: '#4FC3F7' },
   { key: 'tel', kind: 'SPECIAL', nameHi: 'सरसों का तेल', nameEn: 'Mustard oil', animationKey: 'tel_abhishek', particleCount: 10, coinCost: 0, deities: ['shani'], color: '#827717' },
+  // Premium
+  { key: 'gulab', kind: 'FLOWER', nameHi: 'गुलाब', nameEn: 'Rose', animationKey: 'falling_flowers', particleCount: 25, coinCost: 5, deities: [], color: '#D81B60' },
+  { key: 'kamal', kind: 'FLOWER', nameHi: 'कमल', nameEn: 'Lotus', animationKey: 'falling_flowers', particleCount: 12, coinCost: 11, deities: [], color: '#F48FB1' },
+  { key: 'phool-varsha-108', kind: 'FLOWER', nameHi: '108 फूलों की वर्षा', nameEn: '108 flower shower', animationKey: 'phool_varsha', particleCount: 30, coinCost: 21, deities: [], color: '#FF7043' },
+  { key: 'gulab-mala', kind: 'MALA', nameHi: 'गुलाब की माला', nameEn: 'Rose garland', animationKey: 'mala_drop', particleCount: 1, coinCost: 11, deities: [], color: '#C2185B' },
+  { key: 'pancha-deep', kind: 'DIYA', nameHi: 'पंचदीप', nameEn: 'Pancha-deep', animationKey: 'pancha_deep', particleCount: 5, coinCost: 11, deities: [], color: '#FFC107' },
+  { key: 'chhappan-bhog', kind: 'BHOG', nameHi: 'छप्पन भोग', nameEn: 'Chhappan bhog', animationKey: 'bhog_place', particleCount: 1, coinCost: 21, deities: [], color: '#FFB300' },
+  { key: 'chandan', kind: 'SPECIAL', nameHi: 'चंदन', nameEn: 'Chandan', animationKey: 'chandan_tilak', particleCount: 1, coinCost: 5, deities: [], color: '#E6C79C' },
+  { key: 'chunari', kind: 'SPECIAL', nameHi: 'चुनरी', nameEn: 'Chunari', animationKey: 'chunari_drape', particleCount: 1, coinCost: 21, deities: ['durga', 'lakshmi'], color: '#C62828' },
 ];
+
+/** Items earlier seeds created that are no longer in the catalogue; the seed deactivates them. */
+export const RETIRED_OFFERING_KEYS = ['ghee-diya', 'laddoo'];
 
 /** Store product ids are placeholders until the App Store / Play Console products exist (T15). */
 export const COIN_PACKS = [
@@ -195,10 +206,12 @@ export const MANDIR_FLAGS: { key: string; enabled: boolean; description: string 
 
 /** Remote config keys this module reads (§7 Config); merged into `app.remote_config` if missing. */
 export const MANDIR_REMOTE_CONFIG = {
-  freeOfferingsPerDeityPerDay: 3,
   uploadMaxPerDay: 10,
   shareAppLink: null,
 };
+
+/** Keys this module no longer reads; the seed removes them (free offerings are unlimited, §6.5). */
+export const OBSOLETE_REMOTE_CONFIG_KEYS = ['freeOfferingsPerDeityPerDay'];
 
 export const DEFAULT_THEME = {
   key: 'default',

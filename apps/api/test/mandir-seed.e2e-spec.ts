@@ -63,8 +63,17 @@ describe('Mandir seed (e2e)', () => {
       'Jal abhishek': ['shiv'],
       'Mustard oil': ['shani'],
     });
-    for (const kind of ['FLOWER', 'MALA', 'DIYA', 'BHOG'] as const) {
-      const items = await prisma.offeringItem.findMany({ where: { kind } });
+    // §12: every kind has a free basic item and a premium one; retired items are inactive.
+    const catalogue = await prisma.offeringItem.findMany({ where: { isActive: true } });
+    expect(catalogue.filter((i) => i.coinCost > 0).map((i) => i.nameEn)).toEqual(
+      expect.arrayContaining(['108 flower shower', 'Chandan', 'Chhappan bhog', 'Chunari', 'Lotus', 'Pancha-deep', 'Rose', 'Rose garland']),
+    );
+    expect(catalogue.map((i) => i.nameEn)).not.toContain('Ghee lamp');
+    expect(catalogue.map((i) => i.nameEn)).not.toContain('Laddoo bhog');
+    const chunari = specials.find((s) => s.nameEn === 'Chunari')!;
+    expect(chunari.deities.map((x) => x.deity.slug).sort()).toEqual(['durga', 'lakshmi']);
+    for (const kind of ['FLOWER', 'MALA', 'DIYA', 'BHOG', 'SPECIAL'] as const) {
+      const items = catalogue.filter((i) => i.kind === kind);
       expect(items.some((i) => i.coinCost === 0)).toBe(true);
       expect(items.some((i) => i.coinCost > 0)).toBe(true);
     }
@@ -82,7 +91,8 @@ describe('Mandir seed (e2e)', () => {
     const flags = await prisma.featureFlag.findMany({ where: { key: { in: Object.values(MandirFlag) } } });
     expect(flags).toHaveLength(Object.values(MandirFlag).length);
     const remote = await prisma.featureFlag.findUnique({ where: { key: REMOTE_CONFIG_FLAG_KEY } });
-    expect(remote!.payload).toMatchObject({ freeOfferingsPerDeityPerDay: expect.any(Number) });
+    expect(remote!.payload).toMatchObject({ uploadMaxPerDay: expect.any(Number) });
+    expect(remote!.payload).not.toHaveProperty('freeOfferingsPerDeityPerDay');
 
     const wallet = await prisma.coinWallet.findUnique({ where: { userId: devUserId } });
     const ledger = await prisma.coinTransaction.aggregate({ where: { userId: devUserId }, _sum: { amount: true } });

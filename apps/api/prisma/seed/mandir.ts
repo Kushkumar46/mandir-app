@@ -1,6 +1,8 @@
 /**
  * Virtual Mandir seed (module doc §14 T3). Idempotent and create-only: rows have fixed ids and
  * existing rows are never overwritten, so admin edits and the dev-user's spent coins survive.
+ * Exceptions: seed-owned offerings retired from the catalogue are deactivated, and obsolete remote
+ * config keys are removed.
  * Placeholder media is (re)uploaded every run — keys are seed-owned and content is deterministic.
  */
 import { REMOTE_CONFIG_FLAG_KEY } from '@mandir/shared-types';
@@ -16,8 +18,10 @@ import {
   DEV_USER_START_COINS,
   MANDIR_FLAGS,
   MANDIR_REMOTE_CONFIG,
+  OBSOLETE_REMOTE_CONFIG_KEYS,
   OFFERINGS,
   PLACEHOLDER_AARTI_SECONDS,
+  RETIRED_OFFERING_KEYS,
   REWARD_RULES,
   type SeedDeity,
 } from './mandir-data.js';
@@ -176,6 +180,12 @@ async function seedOfferings(
       });
     }
   }
+
+  // Past ritual logs reference retired items, so they are deactivated rather than deleted.
+  await prisma.offeringItem.updateMany({
+    where: { id: { in: RETIRED_OFFERING_KEYS.map((key) => seedId(`offering:${key}`)) }, isActive: true },
+    data: { isActive: false },
+  });
 }
 
 async function seedCoinPacks(prisma: PrismaClient): Promise<void> {
@@ -200,14 +210,17 @@ async function seedFlags(prisma: PrismaClient): Promise<void> {
     await prisma.featureFlag.upsert({ where: { key: flag.key }, update: {}, create: flag });
   }
 
-  // Add this module's remote config keys where missing; never overwrite admin-edited values.
+  // Add this module's remote config keys where missing (never overwrite admin-edited values) and
+  // drop keys it no longer reads.
   const row = await prisma.featureFlag.findUniqueOrThrow({ where: { key: REMOTE_CONFIG_FLAG_KEY } });
   const current = (row.payload ?? {}) as Prisma.JsonObject;
   const missing = Object.entries(MANDIR_REMOTE_CONFIG).filter(([k]) => !(k in current));
-  if (missing.length > 0) {
+  const obsolete = OBSOLETE_REMOTE_CONFIG_KEYS.filter((k) => k in current);
+  if (missing.length > 0 || obsolete.length > 0) {
+    const kept = Object.fromEntries(Object.entries(current).filter(([k]) => !obsolete.includes(k)));
     await prisma.featureFlag.update({
       where: { key: REMOTE_CONFIG_FLAG_KEY },
-      data: { payload: { ...current, ...Object.fromEntries(missing) } },
+      data: { payload: { ...kept, ...Object.fromEntries(missing) } },
     });
   }
 }

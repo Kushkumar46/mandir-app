@@ -1,5 +1,8 @@
-import { Body, Controller, Get, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import {
+  type MakeOfferingRequest,
+  makeOfferingRequestSchema,
+  type MakeOfferingResponse,
   MandirFlag,
   type MandirHome,
   type SetDeityImageRequest,
@@ -18,7 +21,11 @@ import { flagContextFromRequest } from '../../core/feature-flags/flag-context.js
 import { RequireFlag } from '../../core/feature-flags/require-flag.guard.js';
 import { Idempotent } from '../../core/idempotency/idempotency.interceptor.js';
 import { ZodValidationPipe } from '../../core/validation/zod-validation.pipe.js';
+import { UserThrottle } from '../../core/throttle/user-throttle.guard.js';
 import { MandirService } from './mandir.service.js';
+
+/** §6.5 technical throttle on `POST /mandir/offerings`, per user. */
+export const OFFERINGS_PER_MINUTE = 60;
 
 // docs/modules/01-virtual-mandir.md §7 "Mandir"; remaining stubs are replaced by their build tasks.
 @Controller('mandir')
@@ -48,12 +55,19 @@ export class MandirController {
     return this.mandir.setDeityImage(user.id, deityId, body.imageId);
   }
 
-  // Paid items additionally need `mandir.premium_offerings`, checked in the service (T6).
+  // Paid items additionally need `mandir.premium_offerings`, checked in the service. Free offerings
+  // are unlimited (§6.5); only this technical throttle applies.
   @Post('offerings')
+  @HttpCode(HttpStatus.OK)
   @RequireFlag(MandirFlag.OFFERINGS)
+  @UserThrottle(OFFERINGS_PER_MINUTE)
   @Idempotent()
-  offer() {
-    throw AppException.notImplemented('T6');
+  offer(
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request & { user?: AuthUser },
+    @Body(new ZodValidationPipe(makeOfferingRequestSchema)) body: MakeOfferingRequest,
+  ): Promise<MakeOfferingResponse> {
+    return this.mandir.makeOffering(user, body, flagContextFromRequest(req));
   }
 
   @Post('rituals/aarti-complete')

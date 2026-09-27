@@ -1,40 +1,44 @@
+import { randomUUID } from 'node:crypto';
+
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   type DeityListItem,
+  type DeityOfferings,
   ErrorCode,
   type HomeDeity,
-  MANDIR_REMOTE_CONFIG_DEFAULTS,
+  type MakeOfferingRequest,
+  type MakeOfferingResponse,
   MandirFlag,
   type MandirHome,
   type MandirTheme,
+  type OfferingItemView,
+  offeringKindSchema,
   type SetDeityImageResponse,
   type SetMandirDeitiesRequest,
   type SetMandirDeitiesResponse,
   type TodayOfferings,
 } from '@mandir/shared-types';
-import { z } from 'zod';
 
 import type { AuthUser } from '../../core/auth/auth.decorators.js';
 import { AppException } from '../../core/errors/app.exception.js';
 import { FeatureFlagService } from '../../core/feature-flags/feature-flag.service.js';
 import type { FlagContext } from '../../core/feature-flags/flag-evaluator.js';
 import { PrismaService } from '../../core/prisma/prisma.module.js';
+import { lockUser } from '../../core/prisma/user-lock.js';
 import { StorageService } from '../../core/storage/storage.service.js';
 import { localDateIn, weekdayOf } from '../../core/time/local-date.js';
-import type { Deity } from '../../generated/prisma/client.js';
+import type { Deity, OfferingItem, Prisma } from '../../generated/prisma/client.js';
 import { CoinsService } from '../coins/coins.service.js';
+import { RewardsService } from '../coins/rewards.service.js';
 import { ImagesService } from '../images/images.service.js';
 import { StreaksService } from '../streaks/streaks.service.js';
 import { pickDefaultDeity } from './default-deity.js';
 import { tithiText } from './panchang.js';
 
 const DEFAULT_THEME_KEY = 'default';
-
-const freeOfferingsSchema = z
-  .number()
-  .int()
-  .min(0)
-  .catch(MANDIR_REMOTE_CONFIG_DEFAULTS.freeOfferingsPerDeityPerDay);
+const FIRST_DARSHAN_REWARD = 'FIRST_DARSHAN_OF_DAY';
+// Lock waits under contention count against these (as in CoinsService).
+const TX_OPTIONS = { maxWait: 10_000, timeout: 15_000 };
 
 /** One deity in the user's mandir, in display order. */
 interface MandirEntry {
@@ -53,6 +57,7 @@ export class MandirService {
     private readonly flags: FeatureFlagService,
     private readonly images: ImagesService,
     private readonly coins: CoinsService,
+    private readonly rewards: RewardsService,
     private readonly streaks: StreaksService,
   ) {}
 
@@ -73,7 +78,7 @@ export class MandirService {
         ? this.specialOfferings(deityIds, isOn(MandirFlag.PREMIUM_OFFERINGS))
         : new Map<string, HomeDeity['specialOffering']>(),
       this.defaultAartiIds(deityIds),
-      this.todayOfferings(user.id, localDate, deityIds),
+      this.todayOfferings(this.prisma, user.id, localDate, deityIds),
       this.coins.getBalance(user.id),
       this.streaks.summary(user.id, localDate),
     ]);
@@ -100,7 +105,6 @@ export class MandirService {
       todayOfferings,
       coins: { balance },
       streak,
-      limits: { freeOfferingsPerDeityPerDay: freeOfferingsSchema.parse(config.remoteConfig.freeOfferingsPerDeityPerDay) },
     };
   }
 
@@ -180,13 +184,107 @@ export class MandirService {
     return { deityId, image: images.get(deityId) ?? null };
   }
 
-  /** Today's offerings per deity (every requested deity gets an entry). Shared with T6. */
-  async todayOfferings(userId: string, localDate: string, deityIds: string[]): Promise<Record<string, TodayOfferings>> {
+  /** `GET /v1/deities/:deityId/offerings` — valid items grouped by kind. */
+  async deityOfferings(deityId: string, flagCtx: FlagContext): Promise<DeityOfferings> {
+    const [config] = await Promise.all([this.flags.getAppConfig(flagCtx), this.activeDeity(deityId)]);
+    const premiumOn = config.flags[MandirFlag.PREMIUM_OFFERINGS]?.enabled === true;
+
+    const items = await this.prisma.offeringItem.findMany({
+      where: {
+        isActive: true,
+        ...(premiumOn ? {} : { coinCost: 0 }),
+        OR: [{ deities: { none: {} } }, { deities: { some: { deityId } } }],
+      },
+      orderBy: [{ sortOrder: 'asc' }, { coinCost: 'asc' }, { nameEn: 'asc' }],
+    });
+
+    return {
+      deityId,
+      groups: offeringKindSchema.options
+        .map((kind) => ({ kind, items: items.filter((i) => i.kind === kind).map((i) => this.offeringItemView(i)) }))
+        .filter((g) => g.items.length > 0),
+    };
+  }
+
+  /**
+   * `POST /v1/mandir/offerings` — logs the offering, spends coins for a paid item, counts the darshan
+   * day (§6.3) and pays FIRST_DARSHAN_OF_DAY (§6.4), all in one transaction. Free offerings are
+   * unlimited (§6.5); the controller throttles the route per user. The per-user lock, taken first,
+   * keeps reward caps correct under concurrent requests and the lock order (user → wallet) fixed.
+   */
+  async makeOffering(user: AuthUser, body: MakeOfferingRequest, flagCtx: FlagContext): Promise<MakeOfferingResponse> {
+    const [config, , item] = await Promise.all([
+      this.flags.getAppConfig(flagCtx),
+      this.activeDeity(body.deityId),
+      this.prisma.offeringItem.findUnique({
+        where: { id: body.offeringItemId },
+        include: { deities: { select: { deityId: true } } },
+      }),
+    ]);
+    const isOn = (key: MandirFlag) => config.flags[key]?.enabled === true;
+    if (!item?.isActive || (item.deities.length > 0 && !item.deities.some((d) => d.deityId === body.deityId))) {
+      throw new AppException(ErrorCode.ITEM_NOT_AVAILABLE, 'Offering item not available', HttpStatus.NOT_FOUND, {
+        offeringItemId: body.offeringItemId,
+        deityId: body.deityId,
+      });
+    }
+    const coinCost = item.coinCost;
+    if (coinCost > 0 && !isOn(MandirFlag.PREMIUM_OFFERINGS)) {
+      throw new AppException(ErrorCode.FEATURE_DISABLED, 'This feature is not available', HttpStatus.FORBIDDEN, {
+        flag: MandirFlag.PREMIUM_OFFERINGS,
+      });
+    }
+    const localDate = localDateIn(user.timezone);
+
+    return this.prisma.$transaction(async (tx) => {
+      await lockUser(tx, user.id);
+      const logId = randomUUID();
+      let balance: number | null = null;
+      if (coinCost > 0) {
+        ({ balance } = await this.coins.debit(user.id, coinCost, { reason: 'OFFERING', refType: 'offering', refId: logId }, tx));
+      }
+      await tx.ritualLog.create({
+        data: {
+          id: logId,
+          userId: user.id,
+          deityId: body.deityId,
+          action: 'OFFERING',
+          offeringItemId: item.id,
+          coinsSpent: coinCost,
+          localDate,
+        },
+      });
+
+      const streak = await this.streaks.recordDarshanDay(tx, user.id, localDate);
+      const reward = isOn(MandirFlag.REWARDS)
+        ? await this.rewards.grant(tx, user.id, FIRST_DARSHAN_REWARD, { localDate, timezone: user.timezone })
+        : null;
+      if (reward) balance = reward.balance;
+      balance ??= (await tx.coinWallet.findUnique({ where: { userId: user.id } }))?.balance ?? 0;
+
+      const today = await this.todayOfferings(tx, user.id, localDate, [body.deityId]);
+      return {
+        coinsBalance: balance,
+        coinsSpent: coinCost,
+        streak: { current: streak.current, doneToday: streak.doneToday },
+        reward: reward && { ruleKey: reward.ruleKey, coins: reward.coins },
+        todayOfferings: today[body.deityId]!,
+      };
+    }, TX_OPTIONS);
+  }
+
+  /** Today's offerings per deity (every requested deity gets an entry). */
+  async todayOfferings(
+    db: Prisma.TransactionClient,
+    userId: string,
+    localDate: string,
+    deityIds: string[],
+  ): Promise<Record<string, TodayOfferings>> {
     const result: Record<string, TodayOfferings> = Object.fromEntries(
       deityIds.map((id) => [id, { flowers: 0, mala: false, diya: false, bhog: false }]),
     );
     if (!deityIds.length) return result;
-    const logs = await this.prisma.ritualLog.findMany({
+    const logs = await db.ritualLog.findMany({
       where: { userId, localDate, action: 'OFFERING', deityId: { in: deityIds } },
       select: { deityId: true, offeringItem: { select: { kind: true } } },
     });
@@ -208,6 +306,26 @@ export class MandirService {
       }
     }
     return result;
+  }
+
+  private async activeDeity(deityId: string): Promise<Deity> {
+    const deity = await this.prisma.deity.findUnique({ where: { id: deityId } });
+    if (!deity?.isActive) throw deityNotAvailable({ deityId });
+    return deity;
+  }
+
+  private offeringItemView(item: OfferingItem): OfferingItemView {
+    return {
+      id: item.id,
+      kind: item.kind,
+      nameHi: item.nameHi,
+      nameEn: item.nameEn,
+      iconUrl: this.storage.publicUrl(item.iconUrl),
+      spriteUrl: this.storage.publicUrl(item.spriteUrl),
+      animationKey: item.animationKey,
+      particleCount: item.particleCount,
+      coinCost: item.coinCost,
+    };
   }
 
   /** The user's saved deity list, or — until they save one — all active deities by sort order. */

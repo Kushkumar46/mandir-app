@@ -84,7 +84,6 @@ export const mandirHomeSchema = z.object({
   todayOfferings: z.record(z.string(), todayOfferingsSchema),
   coins: z.object({ balance: z.number().int() }),
   streak: z.object({ current: z.number().int(), longest: z.number().int(), doneToday: z.boolean() }),
-  limits: z.object({ freeOfferingsPerDeityPerDay: z.number().int() }),
 });
 export type MandirHome = z.infer<typeof mandirHomeSchema>;
 
@@ -136,8 +135,3 @@ export type SetDeityImageRequest = z.infer<typeof setDeityImageRequestSchema>;
 /** The image the user now sees for that deity (after §6.2 resolution). */
 export const setDeityImageResponseSchema = z.object({ deityId: z.uuid(), image: deityImageViewSchema.nullable() });
 export type SetDeityImageResponse = z.infer<typeof setDeityImageResponseSchema>;
-
-/** Remote config keys owned by this module (`app.remote_config` payload) and their code defaults. */
-export const MANDIR_REMOTE_CONFIG_DEFAULTS = {
-  freeOfferingsPerDeityPerDay: 3,
-} as const;
