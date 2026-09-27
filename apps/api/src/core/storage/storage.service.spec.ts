@@ -48,6 +48,17 @@ describe('StorageService', () => {
     expect(get).toContain('X-Amz-Expires=60');
   });
 
+  it('puts objects into the bucket that owns the key, cacheable only when public', async () => {
+    const send = vi.spyOn(storage.client, 'send').mockResolvedValue({} as never);
+    await storage.put('official/x.webp', new Uint8Array([1]), 'image/webp');
+    await storage.put('home-mandir/u/x.jpg', new Uint8Array([1]), 'image/jpeg');
+    const inputs = send.mock.calls.map((c) => (c[0] as unknown as { input: Record<string, unknown> }).input);
+    expect(inputs[0]).toMatchObject({ Bucket: 'media-public', Key: 'official/x.webp', ContentType: 'image/webp' });
+    expect(inputs[0]!.CacheControl).toContain('immutable');
+    expect(inputs[1]).toMatchObject({ Bucket: 'media-private', CacheControl: 'private, no-store' });
+    send.mockRestore();
+  });
+
   it('copies across buckets on approval', async () => {
     const send = vi.spyOn(storage.client, 'send').mockResolvedValue({} as never);
     await storage.copy('community/pending/x.jpg', 'community/public/x.jpg');

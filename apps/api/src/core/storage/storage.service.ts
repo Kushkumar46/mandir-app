@@ -110,6 +110,19 @@ export class StorageService {
     );
   }
 
+  /** Server-side write (seed, generated variants). Public objects get a long immutable cache. */
+  async put(objectKey: string, body: Uint8Array | string, contentType: string): Promise<void> {
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucketFor(objectKey),
+        Key: objectKey,
+        Body: body,
+        ContentType: contentType,
+        CacheControl: this.isPublic(objectKey) ? 'public, max-age=31536000, immutable' : 'private, no-store',
+      }),
+    );
+  }
+
   async delete(objectKey: string): Promise<void> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucketFor(objectKey), Key: objectKey }));
   }

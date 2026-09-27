@@ -23,7 +23,7 @@ describe('Virtual Mandir scaffolding (e2e)', () => {
     await app?.close();
   });
 
-  // Stubs answer 501 until their task lands; flag-gated ones answer 403 until T3 seeds the flags.
+  // Stubs answer 501 until their task lands (flag-gated ones would answer 403 if their flag is off).
   it.each([
     ['get', '/v1/mandir/home'],
     ['get', '/v1/deities'],

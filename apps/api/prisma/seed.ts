@@ -1,45 +1,23 @@
 /**
- * Idempotent seed (safe to run repeatedly). Foundation data only:
- * dev users for the DEV_AUTH stub and the remote-config flag row.
- * Module seed data (deities, offerings, coin packs, module flags …) is added by module tasks.
+ * `pnpm db:seed` entry point. Needs `pnpm dev:infra` (Postgres + RustFS buckets) and a migrated DB.
+ * Idempotent — see prisma/seed/index.ts.
  */
 import 'dotenv/config';
 
 import { PrismaPg } from '@prisma/adapter-pg';
-import { REMOTE_CONFIG_FLAG_KEY } from '@mandir/shared-types';
 
-import { DEV_USERS } from '../src/core/auth/dev-users.js';
+import { AppConfigService } from '../src/core/config/config.module.js';
+import { StorageService } from '../src/core/storage/storage.service.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { runSeed } from './seed/index.js';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
+const storage = new StorageService(new AppConfigService());
 
-async function main() {
-  for (const user of Object.values(DEV_USERS)) {
-    await prisma.user.upsert({
-      where: { id: user.id },
-      update: { name: user.name, role: user.role },
-      create: { id: user.id, name: user.name, role: user.role },
-    });
-  }
-
-  await prisma.featureFlag.upsert({
-    where: { key: REMOTE_CONFIG_FLAG_KEY },
-    // Don't overwrite values an admin may have edited.
-    update: {},
-    create: {
-      key: REMOTE_CONFIG_FLAG_KEY,
-      enabled: true,
-      description: 'Remote config values returned by GET /v1/config (not a feature switch).',
-      payload: { minSupportedAppVersion: '1.0.0', supportWhatsapp: null },
-    },
-  });
-
-  console.log('Seed complete: dev users + remote config.');
-}
-
-main()
+runSeed(prisma, storage)
+  .then(() => console.log('Seed complete: dev users, remote config, Virtual Mandir content + placeholder media.'))
   .catch((err) => {
     console.error(err);
     process.exitCode = 1;
