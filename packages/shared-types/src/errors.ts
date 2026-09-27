@@ -28,6 +28,10 @@ export const ErrorCode = {
   DEITY_NOT_IN_MANDIR: 'DEITY_NOT_IN_MANDIR',
   /** Image unknown, of another deity, or not visible to the user (§6.2). */
   IMAGE_NOT_AVAILABLE: 'IMAGE_NOT_AVAILABLE',
+
+  // Coins
+  /** 402 — balance too low; `details: { required, balance }`. */
+  COINS_INSUFFICIENT: 'COINS_INSUFFICIENT',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
