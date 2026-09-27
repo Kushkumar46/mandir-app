@@ -14,6 +14,10 @@ import { PrismaModule } from './core/prisma/prisma.module.js';
 import { RedisModule } from './core/redis/redis.module.js';
 import { ResponseEnvelopeInterceptor } from './core/response/response-envelope.interceptor.js';
 import { StorageModule } from './core/storage/storage.service.js';
+import { CoinsModule } from './modules/coins/coins.module.js';
+import { ImagesModule } from './modules/images/images.module.js';
+import { MandirModule } from './modules/mandir/mandir.module.js';
+import { StreaksModule } from './modules/streaks/streaks.module.js';
 
 @Module({
   imports: [
@@ -27,6 +31,10 @@ import { StorageModule } from './core/storage/storage.service.js';
     IdempotencyModule,
     FeatureFlagsModule,
     // Feature modules (apps/api/src/modules/*) are added here by their build tasks.
+    CoinsModule,
+    ImagesModule,
+    StreaksModule,
+    MandirModule,
   ],
   controllers: [HealthController],
   providers: [

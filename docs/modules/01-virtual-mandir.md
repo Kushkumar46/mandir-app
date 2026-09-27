@@ -638,7 +638,7 @@ Seed deities: Ganesh, Shiv, Hanuman, Vishnu, Lakshmi, Durga, Krishna, Ram, Shani
 
 Each task: implement → tests → lint/typecheck → verify acceptance criteria.
 
-- [ ] **T1 Module scaffolding** — `mandir`, `coins`, `images`, `streaks` NestJS modules + shared-types folders + app `features/` folders. *AC:* app and API compile; routes registered under `/v1`.
+- [x] **T1 Module scaffolding** — `mandir`, `coins`, `images`, `streaks` NestJS modules + shared-types folders + app `features/` folders. *AC:* app and API compile; routes registered under `/v1`.
 - [ ] **T2 Prisma schema + migration** — all models in §5. *AC:* `pnpm db:migrate` succeeds; schema matches doc.
 - [ ] **T3 Seed** — 10 deities (weekday map), 10 temples, placeholder official images (use bundled sample images uploaded to the local `media-public` bucket), offering items (free + paid per kind, sindoor for Hanuman, jal for Shiv, tel for Shani), 1 aarti per deity (placeholder audio + lyrics JSON), 4 coin packs, reward rules, flags, default theme, dev-user with 50 coins. *AC:* `pnpm db:seed` idempotent.
 - [ ] **T4 Home + deities APIs** — `/mandir/home`, `/deities`, `/mandir/deities`, `/mandir/deities/:id/image`, image resolution rules §6.2. *AC:* e2e tests for default deity logic and image fallback.

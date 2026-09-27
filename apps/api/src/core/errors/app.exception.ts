@@ -20,6 +20,13 @@ export class AppException extends HttpException {
     return new AppException(ErrorCode.FORBIDDEN, message, HttpStatus.FORBIDDEN);
   }
 
+  /** For scaffolded routes; `task` is the build task that implements it, e.g. "T4". */
+  static notImplemented(task: string) {
+    return new AppException(ErrorCode.NOT_IMPLEMENTED, `Not implemented yet (${task})`, HttpStatus.NOT_IMPLEMENTED, {
+      task,
+    });
+  }
+
   static unauthenticated(message = 'Authentication required') {
     return new AppException(ErrorCode.UNAUTHENTICATED, message, HttpStatus.UNAUTHORIZED);
   }

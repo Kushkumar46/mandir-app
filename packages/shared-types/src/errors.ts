@@ -11,6 +11,8 @@ export const ErrorCode = {
   RATE_LIMITED: 'RATE_LIMITED',
   CONFLICT: 'CONFLICT',
   INTERNAL: 'INTERNAL',
+  /** Route is registered but its build task has not been implemented yet. */
+  NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
 
   // Foundation
   FEATURE_DISABLED: 'FEATURE_DISABLED',

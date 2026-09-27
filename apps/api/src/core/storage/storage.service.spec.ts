@@ -51,7 +51,7 @@ describe('StorageService', () => {
   it('copies across buckets on approval', async () => {
     const send = vi.spyOn(storage.client, 'send').mockResolvedValue({} as never);
     await storage.copy('community/pending/x.jpg', 'community/public/x.jpg');
-    const input = (send.mock.calls[0]![0] as { input: Record<string, string> }).input;
+    const input = (send.mock.calls[0]![0] as unknown as { input: Record<string, string> }).input;
     expect(input).toMatchObject({
       Bucket: 'media-public',
       CopySource: 'media-private/community/pending/x.jpg',
