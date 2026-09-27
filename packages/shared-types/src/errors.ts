@@ -20,6 +20,14 @@ export const ErrorCode = {
   IDEMPOTENCY_KEY_INVALID: 'IDEMPOTENCY_KEY_INVALID',
   IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
   APP_UPDATE_REQUIRED: 'APP_UPDATE_REQUIRED',
+
+  // Virtual Mandir
+  /** Deity unknown or inactive. */
+  DEITY_NOT_AVAILABLE: 'DEITY_NOT_AVAILABLE',
+  /** Deity is not in the user's mandir list. */
+  DEITY_NOT_IN_MANDIR: 'DEITY_NOT_IN_MANDIR',
+  /** Image unknown, of another deity, or not visible to the user (§6.2). */
+  IMAGE_NOT_AVAILABLE: 'IMAGE_NOT_AVAILABLE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

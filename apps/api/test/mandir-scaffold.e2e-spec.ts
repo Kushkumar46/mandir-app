@@ -23,12 +23,8 @@ describe('Virtual Mandir scaffolding (e2e)', () => {
     await app?.close();
   });
 
-  // Stubs answer 501 until their task lands (flag-gated ones would answer 403 if their flag is off).
+  // Stubs answer 501 until their task lands (T4 routes are covered by mandir-home.e2e-spec.ts) (flag-gated ones would answer 403 if their flag is off).
   it.each([
-    ['get', '/v1/mandir/home'],
-    ['get', '/v1/deities'],
-    ['put', '/v1/mandir/deities'],
-    ['put', '/v1/mandir/deities/x/image'],
     ['get', '/v1/deities/x/offerings'],
     ['post', '/v1/mandir/offerings'],
     ['get', '/v1/deities/x/aartis'],

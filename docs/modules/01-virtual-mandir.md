@@ -431,7 +431,9 @@ Rules:
 ## 6. Business rules
 
 ### 6.1 Default deity of the day
-Priority: pinned deity → today's weekday deity (if in user's mandir) → first deity by position. Seed weekday map: Sun Surya, Mon Shiv, Tue Hanuman, Wed Ganesh, Thu Vishnu, Fri Lakshmi, Sat Shani (editable in admin). Active theme may override (e.g. Navratri → Durga).
+Priority: pinned deity → active festival theme's deity (if in user's mandir) → today's weekday deity (if in user's mandir) → first deity by position. Seed weekday map: Sun Surya, Mon Shiv, Tue Hanuman, Wed Ganesh, Thu Vishnu, Fri Lakshmi, Sat Shani (editable in admin). Active theme may override (e.g. Navratri → Durga): with `mandir.festival_themes` on, a running non-default theme (`isActive`, within `startsAt`/`endsAt`) is used and its `deityIds` override the weekday deity, never a pinned one.
+
+Until a user saves a deity list (`PUT /mandir/deities`, or onboarding in the Auth module), their mandir is **all active deities by `sortOrder`**. Setting an image for a deity saves that implicit list first.
 
 ### 6.2 Image resolution for a deity (what the user sees)
 user's `selectedImageId` (if still visible to that user) → featured PUBLIC image → deity `defaultImageId` → bundled fallback. An image becomes invisible to others the moment its status leaves PUBLIC; users who had selected it fall back automatically.
@@ -494,13 +496,13 @@ All under `/v1`, auth required unless noted. Schemas live in `packages/shared-ty
 {
   "data": {
     "today": { "localDate": "2026-09-29", "weekday": 2, "tithiText": "मंगलवार, आश्विन कृष्ण पक्ष तृतीया" },
-    "theme": { "key": "default", "frameUrl": "…", "colors": { } },
+    "theme": { "key": "default", "frameUrl": "…", "colors": { }, "deityIds": [] },
     "defaultDeityId": "…",
     "deities": [{
-      "id": "…", "slug": "hanuman", "nameHi": "हनुमान जी", "position": 0, "isPinned": false,
-      "image": { "id": "…", "source": "COMMUNITY", "urls": { "thumb": "…", "card": "…", "full": "…", "hd": "…" },
+      "id": "…", "slug": "hanuman", "nameHi": "हनुमान जी", "nameEn": "Hanuman ji", "position": 0, "isPinned": false,
+      "image": { "id": "…", "source": "COMMUNITY", "status": "PUBLIC", "urls": { "thumb": "…", "card": "…", "full": "…", "hd": "…" },
                  "anchor": { "x": 0.5, "y": 0.35 }, "credit": { "name": "Ramesh", "temple": "Hanuman Garhi, Ayodhya" } },
-      "specialOffering": { "itemId": "…", "labelHi": "सिंदूर चढ़ाएं" },
+      "specialOffering": { "itemId": "…", "nameHi": "सिंदूर", "nameEn": "Sindoor", "iconUrl": "…", "coinCost": 0 },
       "defaultAartiId": "…"
     }],
     "todayOfferings": { "<deityId>": { "flowers": 14, "mala": true, "diya": true, "bhog": false } },
@@ -511,6 +513,16 @@ All under `/v1`, auth required unless noted. Schemas live in `packages/shared-ty
 }
 ```
 Note: Phase 1 `tithiText` comes from a simple server-side panchang util or a precomputed table; full Panchang is Phase 2.
+
+T4 contract notes (zod schemas in `packages/shared-types/src/mandir/home.ts`):
+- `tithiText` is in the user's language (hi default): tithi at 06:00 local time from low-precision sun/moon positions, purnimanta month names, no adhik maas (`apps/api/src/modules/mandir/panchang.ts`).
+- `image` is null when the bundled fallback should be shown. It carries `status` so the owner's PROCESSING upload can show the placeholder; the owner's non-public images get 1-hour signed URLs (every size points at the original until variants exist). `credit` = uploader credit (if `showCredit`) + "temple, city", or null.
+- `specialOffering` returns the item names instead of a ready label; the app builds the CTA ("सिंदूर चढ़ाएं") via i18n. It is null when `mandir.offerings` is off, or the item is paid and `mandir.premium_offerings` is off.
+- `todayOfferings` has an entry for every deity in `deities`; `flowers` counts today's FLOWER offerings.
+- `streak.current` shows 0 once the last darshan day is before yesterday.
+- `GET /deities` → `[{ id, slug, nameHi, nameEn, weekday, image, inMandir }]` (image as the user would see it).
+- `PUT /mandir/deities`: 1–50 items, unique deityIds and positions, at most one pinned; unknown/inactive deity → 404 `DEITY_NOT_AVAILABLE`. Image selections of kept deities survive. Returns `{ items }` sorted by position.
+- `PUT /mandir/deities/:deityId/image` → `{ deityId, image }` (image after resolution). Errors: 404 `IMAGE_NOT_AVAILABLE` (unknown, other deity, or not usable by the user per §6.2), 404 `DEITY_NOT_AVAILABLE`, 409 `DEITY_NOT_IN_MANDIR`. The `useCount` job (§5 rules) is added with the image pipeline (T16).
 
 `POST /mandir/offerings`
 ```json
@@ -649,7 +661,8 @@ Each task: implement → tests → lint/typecheck → verify acceptance criteria
 - [x] **T2 Prisma schema + migration** — all models in §5. *AC:* `pnpm db:migrate` succeeds; schema matches doc.
 - [x] **T3 Seed** — 10 deities (weekday map), 10 temples, placeholder official images (use bundled sample images uploaded to the local `media-public` bucket), offering items (free + paid per kind, sindoor for Hanuman, jal for Shiv, tel for Shani), 1 aarti per deity (placeholder audio + lyrics JSON), 4 coin packs, reward rules, flags, default theme, dev-user with 50 coins. *AC:* `pnpm db:seed` idempotent.
   - Notes: seeded rows use fixed ids and are **create-only** — re-running never overwrites admin edits or the dev-user's spent coins (`prisma migrate reset` for a clean slate). Remote config gets `freeOfferingsPerDeityPerDay: 3`, `uploadMaxPerDay: 10`, `shareAppLink: null` merged in only where the key is missing. Placeholder media is generated by the seed with `sharp` (no binaries in git) and uploaded to `media-public`: deity images (`official/<slug>/<imageId>/{original.png,thumb,card,full,hd}.webp`, marked PLACEHOLDER in `licenseInfo`), offering icons/sprites, default theme frame, aarti audio as a short **WAV** tone (`audio/aarti/<slug>/v1.wav`; real recordings are AAC/M4A) and lyrics timelines (`lyrics/aarti/<slug>/v1.json`). All must be replaced with licensed assets per §12 before launch.
-- [ ] **T4 Home + deities APIs** — `/mandir/home`, `/deities`, `/mandir/deities`, `/mandir/deities/:id/image`, image resolution rules §6.2. *AC:* e2e tests for default deity logic and image fallback.
+- [x] **T4 Home + deities APIs** — `/mandir/home`, `/deities`, `/mandir/deities`, `/mandir/deities/:id/image`, image resolution rules §6.2. *AC:* e2e tests for default deity logic and image fallback.
+  - Notes: contract details under §7 "T4 contract notes"; §6.1 clarified (festival theme override, implicit default list). Visibility/resolution live in `ImagesService` (`image-visibility.ts`), balance in `CoinsService.getBalance`, streak display in `StreaksService.summary`. Tests: `apps/api/test/mandir-home.e2e-spec.ts` + unit specs for default deity, visibility, tithi and local dates.
 - [ ] **T5 Coin wallet core** — wallet service with transactional credit/debit, idempotency interceptor, transactions API. *AC:* concurrent debit test cannot go negative; repeated Idempotency-Key returns same response.
 - [ ] **T6 Offerings API** — `/deities/:id/offerings`, `POST /mandir/offerings` incl. free daily limit, streak update, reward evaluation. *AC:* e2e for free, paid, insufficient, limit reached, reward granted once.
 - [ ] **T7 Aarti + rituals APIs** — aarti list with URLs, aarti-complete, darshan ping, `/me/streak`, badges. *AC:* streak unit tests incl. timezone boundary.
