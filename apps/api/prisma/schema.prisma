@@ -1,4 +1,4 @@
-// Foundation tables only. Module tables are added by each module's build tasks.
+// Foundation tables + module tables (each module section links to its doc).
 // Convention: models are PascalCase/camelCase in code, snake_case in the database (@@map / @map).
 
 generator client {
@@ -31,6 +31,16 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  // Virtual Mandir (docs/modules/01-virtual-mandir.md §5)
+  templesCreated Temple[]
+  uploadedImages DeityImage[]
+  imageReports   ImageReport[]
+  deities        UserDeity[]
+  ritualLogs     RitualLog[]
+  streak         UserStreak?
+  badges         UserBadge[]
+  coinWallet     CoinWallet?
+
   @@map("users")
 }
 
@@ -47,4 +57,366 @@ model FeatureFlag {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("feature_flags")
+}
+
+// ============================================================================
+// Virtual Mandir + Community Darshan — docs/modules/01-virtual-mandir.md §5
+// ============================================================================
+
+enum ImageSource {
+  OFFICIAL
+  COMMUNITY
+  HOME_MANDIR
+}
+
+enum ImageStatus {
+  PROCESSING
+  AUTO_REJECTED
+  PENDING
+  PRIVATE
+  PUBLIC
+  REJECTED
+  REMOVED
+}
+
+enum OfferingKind {
+  FLOWER
+  MALA
+  DIYA
+  BHOG
+  SPECIAL
+}
+
+enum RitualAction {
+  OFFERING
+  AARTI_COMPLETE
+  BELL
+  DARSHAN
+}
+
+enum CoinTxnReason {
+  PURCHASE
+  OFFERING
+  REWARD
+  REFUND
+  ADMIN_ADJUST
+}
+
+model Deity {
+  id             String              @id @default(uuid()) @db.Uuid
+  slug           String              @unique
+  nameHi         String              @map("name_hi")
+  nameEn         String              @map("name_en")
+  /// 0=Sun … 6=Sat, for default-of-day
+  weekday        Int?
+  defaultImageId String?             @unique @map("default_image_id") @db.Uuid
+  isActive       Boolean             @default(true) @map("is_active")
+  sortOrder      Int                 @default(0) @map("sort_order")
+  defaultImage   DeityImage?         @relation("DeityDefaultImage", fields: [defaultImageId], references: [id], onDelete: SetNull)
+  images         DeityImage[]        @relation("DeityImages")
+  offeringItems  OfferingItemDeity[]
+  aartis         Aarti[]
+  userDeities    UserDeity[]
+  ritualLogs     RitualLog[]
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  @@map("deities")
+}
+
+model Temple {
+  id                    String       @id @default(uuid()) @db.Uuid
+  name                  String
+  nameHi                String?      @map("name_hi")
+  city                  String
+  state                 String?
+  lat                   Float?
+  lng                   Float?
+  /// created by admin vs suggested by user
+  isVerified            Boolean      @default(false) @map("is_verified")
+  /// if true, community uploads auto-go to PRIVATE only
+  photographyRestricted Boolean      @default(false) @map("photography_restricted")
+  createdById           String?      @map("created_by_id") @db.Uuid
+  createdBy             User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  images                DeityImage[]
+  createdAt             DateTime     @default(now()) @map("created_at")
+
+  @@index([city])
+  @@map("temples")
+}
+
+model DeityImage {
+  id                String          @id @default(uuid()) @db.Uuid
+  deityId           String          @map("deity_id") @db.Uuid
+  templeId          String?         @map("temple_id") @db.Uuid
+  source            ImageSource
+  status            ImageStatus     @default(PROCESSING)
+  /// null for OFFICIAL
+  uploadedById      String?         @map("uploaded_by_id") @db.Uuid
+  /// original in storage
+  objectKey         String          @map("object_key")
+  /// { thumb, card, full, hd } keys
+  variants          Json?
+  width             Int?
+  height            Int?
+  phash             String?
+  possibleDuplicate Boolean         @default(false) @map("possible_duplicate")
+  /// raw provider labels
+  moderationScore   Json?           @map("moderation_score")
+  isFeatured        Boolean         @default(false) @map("is_featured")
+  /// mala anchor (0..1)
+  anchorX           Float?          @map("anchor_x")
+  anchorY           Float?          @map("anchor_y")
+  creditName        String?         @map("credit_name")
+  showCredit        Boolean         @default(true) @map("show_credit")
+  consentAt         DateTime?       @map("consent_at")
+  /// for OFFICIAL images
+  licenseInfo       String?         @map("license_info")
+  rejectReason      String?         @map("reject_reason")
+  useCount          Int             @default(0) @map("use_count")
+  deity             Deity           @relation("DeityImages", fields: [deityId], references: [id])
+  temple            Temple?         @relation(fields: [templeId], references: [id])
+  uploadedBy        User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  defaultForDeity   Deity?          @relation("DeityDefaultImage")
+  selectedBy        UserDeity[]
+  reports           ImageReport[]
+  moderationLogs    ModerationLog[]
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@index([deityId, source, status])
+  @@index([uploadedById])
+  @@index([phash])
+  @@map("deity_images")
+}
+
+model ImageReport {
+  id           String     @id @default(uuid()) @db.Uuid
+  imageId      String     @map("image_id") @db.Uuid
+  reportedById String     @map("reported_by_id") @db.Uuid
+  /// WRONG_DEITY | WRONG_TEMPLE | INAPPROPRIATE | COPIED | OTHER
+  reason       String
+  note         String?
+  /// OPEN | ACTIONED | DISMISSED
+  status       String     @default("OPEN")
+  image        DeityImage @relation(fields: [imageId], references: [id])
+  reportedBy   User       @relation(fields: [reportedById], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([imageId, reportedById])
+  @@map("image_reports")
+}
+
+model ModerationLog {
+  id        String     @id @default(uuid()) @db.Uuid
+  imageId   String     @map("image_id") @db.Uuid
+  /// null = system. No FK: audit rows keep an anonymised reference.
+  actorId   String?    @map("actor_id") @db.Uuid
+  /// AUTO_PASS | AUTO_REJECT | APPROVE_PUBLIC | FEATURE | KEEP_PRIVATE | REJECT | REMOVE | RESTORE | EDIT
+  action    String
+  note      String?
+  image     DeityImage @relation(fields: [imageId], references: [id])
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([imageId])
+  @@map("moderation_logs")
+}
+
+model OfferingItem {
+  id            String              @id @default(uuid()) @db.Uuid
+  kind          OfferingKind
+  nameHi        String              @map("name_hi")
+  nameEn        String              @map("name_en")
+  iconUrl       String              @map("icon_url")
+  /// particle / overlay sprite
+  spriteUrl     String              @map("sprite_url")
+  /// "falling_flowers" | "mala_drop" | "diya_light" | "bhog_place" | "sindoor_tilak" …
+  animationKey  String              @map("animation_key")
+  particleCount Int                 @default(20) @map("particle_count")
+  /// 0 = free
+  coinCost      Int                 @default(0) @map("coin_cost")
+  isActive      Boolean             @default(true) @map("is_active")
+  sortOrder     Int                 @default(0) @map("sort_order")
+  /// empty = all deities
+  deities       OfferingItemDeity[]
+  ritualLogs    RitualLog[]
+
+  @@map("offering_items")
+}
+
+model OfferingItemDeity {
+  offeringItemId String       @map("offering_item_id") @db.Uuid
+  deityId        String       @map("deity_id") @db.Uuid
+  item           OfferingItem @relation(fields: [offeringItemId], references: [id], onDelete: Cascade)
+  deity          Deity        @relation(fields: [deityId], references: [id], onDelete: Cascade)
+
+  @@id([offeringItemId, deityId])
+  @@index([deityId])
+  @@map("offering_item_deities")
+}
+
+model Aarti {
+  id          String      @id @default(uuid()) @db.Uuid
+  deityId     String      @map("deity_id") @db.Uuid
+  titleHi     String      @map("title_hi")
+  titleEn     String      @map("title_en")
+  audioKey    String      @map("audio_key")
+  /// JSON timeline
+  lyricsKey   String      @map("lyrics_key")
+  durationSec Int         @map("duration_sec")
+  version     Int         @default(1)
+  isDefault   Boolean     @default(false) @map("is_default")
+  isActive    Boolean     @default(true) @map("is_active")
+  licenseInfo String?     @map("license_info")
+  deity       Deity       @relation(fields: [deityId], references: [id])
+  ritualLogs  RitualLog[]
+
+  @@index([deityId])
+  @@map("aartis")
+}
+
+model UserDeity {
+  userId          String      @map("user_id") @db.Uuid
+  deityId         String      @map("deity_id") @db.Uuid
+  position        Int
+  isPinned        Boolean     @default(false) @map("is_pinned")
+  selectedImageId String?     @map("selected_image_id") @db.Uuid
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deity           Deity       @relation(fields: [deityId], references: [id], onDelete: Cascade)
+  selectedImage   DeityImage? @relation(fields: [selectedImageId], references: [id], onDelete: SetNull)
+
+  @@id([userId, deityId])
+  @@index([selectedImageId])
+  @@map("user_deities")
+}
+
+model RitualLog {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  deityId        String        @map("deity_id") @db.Uuid
+  action         RitualAction
+  offeringItemId String?       @map("offering_item_id") @db.Uuid
+  aartiId        String?       @map("aarti_id") @db.Uuid
+  coinsSpent     Int           @default(0) @map("coins_spent")
+  /// "YYYY-MM-DD" in user's timezone
+  localDate      String        @map("local_date")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deity          Deity         @relation(fields: [deityId], references: [id])
+  offeringItem   OfferingItem? @relation(fields: [offeringItemId], references: [id], onDelete: SetNull)
+  aarti          Aarti?        @relation(fields: [aartiId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, localDate])
+  @@map("ritual_logs")
+}
+
+model UserStreak {
+  userId      String  @id @map("user_id") @db.Uuid
+  current     Int     @default(0)
+  longest     Int     @default(0)
+  /// "YYYY-MM-DD"
+  lastDate    String? @map("last_date")
+  /// future: streak freeze
+  freezesLeft Int     @default(0) @map("freezes_left")
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_streaks")
+}
+
+model UserBadge {
+  userId   String   @map("user_id") @db.Uuid
+  /// STREAK_7 | STREAK_21 | STREAK_51 | STREAK_108 | DARSHAN_SEVAK | TIRTH_YATRI
+  badgeKey String   @map("badge_key")
+  earnedAt DateTime @default(now()) @map("earned_at")
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, badgeKey])
+  @@map("user_badges")
+}
+
+model Theme {
+  id       String    @id @default(uuid()) @db.Uuid
+  /// "default" | "navratri" | "diwali" …
+  key      String    @unique
+  frameKey String    @map("frame_key")
+  colors   Json
+  startsAt DateTime? @map("starts_at")
+  endsAt   DateTime? @map("ends_at")
+  /// empty = all
+  deityIds String[]  @default([]) @map("deity_ids") @db.Uuid
+  isActive Boolean   @default(false) @map("is_active")
+
+  @@map("themes")
+}
+
+// ---- Coins ----
+// Every coin change = insert CoinTransaction + update CoinWallet in ONE transaction,
+// with SELECT … FOR UPDATE on the wallet row. CHECK constraints (migration SQL) keep balances >= 0.
+
+model CoinWallet {
+  userId    String   @id @map("user_id") @db.Uuid
+  balance   Int      @default(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("coin_wallets")
+}
+
+model CoinTransaction {
+  id           String        @id @default(uuid()) @db.Uuid
+  /// No FK: financial rows keep an anonymised reference.
+  userId       String        @map("user_id") @db.Uuid
+  /// + credit, − debit
+  amount       Int
+  balanceAfter Int           @map("balance_after")
+  reason       CoinTxnReason
+  /// "offering" | "purchase" | "reward_rule" | "admin"
+  refType      String?       @map("ref_type")
+  refId        String?       @map("ref_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("coin_transactions")
+}
+
+model CoinPack {
+  id               String         @id @default(uuid()) @db.Uuid
+  coins            Int
+  bonusCoins       Int            @default(0) @map("bonus_coins")
+  productIdIos     String         @map("product_id_ios")
+  productIdAndroid String         @map("product_id_android")
+  isActive         Boolean        @default(true) @map("is_active")
+  sortOrder        Int            @default(0) @map("sort_order")
+  purchases        CoinPurchase[]
+
+  @@map("coin_packs")
+}
+
+model CoinPurchase {
+  id                 String   @id @default(uuid()) @db.Uuid
+  /// No FK: financial rows keep an anonymised reference.
+  userId             String   @map("user_id") @db.Uuid
+  coinPackId         String   @map("coin_pack_id") @db.Uuid
+  /// idempotency for webhooks
+  storeTransactionId String   @unique @map("store_transaction_id")
+  /// ios | android
+  platform           String
+  rawEvent           Json     @map("raw_event")
+  coinPack           CoinPack @relation(fields: [coinPackId], references: [id])
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("coin_purchases")
+}
+
+model RewardRule {
+  id       String  @id @default(uuid()) @db.Uuid
+  /// FIRST_DARSHAN_OF_DAY | AARTI_COMPLETE | STREAK_7 | UPLOAD_APPROVED | IMAGE_USED_BY_10 …
+  key      String  @unique
+  coins    Int
+  /// max times per day
+  dailyCap Int?    @map("daily_cap")
+  isActive Boolean @default(true) @map("is_active")
+
+  @@map("reward_rules")
 }

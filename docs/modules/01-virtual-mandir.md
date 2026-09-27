@@ -415,6 +415,12 @@ model RewardRule {
 }
 ```
 
+Implementation notes (T2 — the Prisma schema adds these on top of the listing above, fields/types unchanged):
+- Foundation conventions: tables and columns are snake_case (`@@map` / `@map`), all uuid ids and uuid references are `@db.Uuid`.
+- Foreign keys follow `docs/02-database-overview.md` → Relationship rules: user-owned rows (`user_deities`, `ritual_logs`, `user_streaks`, `user_badges`, `coin_wallets`, `image_reports`) reference `users` with `ON DELETE CASCADE`; `deity_images.uploaded_by_id` and `temples.created_by_id` use `SET NULL` (approved public photos survive account deletion, anonymised); audit/financial rows (`coin_transactions`, `coin_purchases`, `moderation_logs.actor_id`) keep a plain uuid with no FK.
+- Extra FKs for integrity: `deities.default_image_id` (also unique — an image belongs to one deity) and `user_deities.selected_image_id` → `deity_images` (`SET NULL`, so users fall back per §6.2), `user_deities.deity_id`/`ritual_logs.deity_id` → `deities`, `ritual_logs.offering_item_id`/`aarti_id` (`SET NULL`), `moderation_logs.image_id` → `deity_images`, `coin_purchases.coin_pack_id` → `coin_packs`, `temples.created_by_id` → `users`.
+- DB `CHECK` constraints: `coin_wallets.balance >= 0`, `coin_transactions.balance_after >= 0`, `coin_transactions.amount <> 0`.
+
 Rules:
 - Every coin change = insert `CoinTransaction` + update `CoinWallet` in **one** transaction, with `SELECT … FOR UPDATE` on the wallet row. Balance can never go below 0.
 - `useCount` updated asynchronously (job) when users set/unset an image.
@@ -639,7 +645,7 @@ Seed deities: Ganesh, Shiv, Hanuman, Vishnu, Lakshmi, Durga, Krishna, Ram, Shani
 Each task: implement → tests → lint/typecheck → verify acceptance criteria.
 
 - [x] **T1 Module scaffolding** — `mandir`, `coins`, `images`, `streaks` NestJS modules + shared-types folders + app `features/` folders. *AC:* app and API compile; routes registered under `/v1`.
-- [ ] **T2 Prisma schema + migration** — all models in §5. *AC:* `pnpm db:migrate` succeeds; schema matches doc.
+- [x] **T2 Prisma schema + migration** — all models in §5. *AC:* `pnpm db:migrate` succeeds; schema matches doc.
 - [ ] **T3 Seed** — 10 deities (weekday map), 10 temples, placeholder official images (use bundled sample images uploaded to the local `media-public` bucket), offering items (free + paid per kind, sindoor for Hanuman, jal for Shiv, tel for Shani), 1 aarti per deity (placeholder audio + lyrics JSON), 4 coin packs, reward rules, flags, default theme, dev-user with 50 coins. *AC:* `pnpm db:seed` idempotent.
 - [ ] **T4 Home + deities APIs** — `/mandir/home`, `/deities`, `/mandir/deities`, `/mandir/deities/:id/image`, image resolution rules §6.2. *AC:* e2e tests for default deity logic and image fallback.
 - [ ] **T5 Coin wallet core** — wallet service with transactional credit/debit, idempotency interceptor, transactions API. *AC:* concurrent debit test cannot go negative; repeated Idempotency-Key returns same response.

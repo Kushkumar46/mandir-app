@@ -14,7 +14,7 @@ Purpose: a map of every table so modules don't collide. Full column definitions 
 
 ## Virtual Mandir (Phase 1) — see `modules/01-virtual-mandir.md`
 
-`deities`, `temples`, `deity_images`, `image_reports`, `moderation_logs`, `offering_types`, `offering_items`, `aartis`, `user_deities`, `ritual_logs`, `user_streaks`, `themes`
+`deities`, `temples`, `deity_images`, `image_reports`, `moderation_logs`, `offering_items`, `offering_item_deities`, `aartis`, `user_deities`, `ritual_logs`, `user_streaks`, `user_badges`, `themes` (offering kind is an enum, not a table)
 
 ## Coins (Phase 1)
 
