@@ -1,0 +1,28 @@
+{
+  "name": "mandir-app",
+  "private": true,
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev:infra": "docker compose up -d",
+    "dev:infra:down": "docker compose down",
+    "dev:api": "turbo run dev --filter=@mandir/api",
+    "dev:admin": "turbo run dev --filter=@mandir/admin-web",
+    "dev:app": "turbo run build --filter=@mandir/devotee-app^... && pnpm --filter @mandir/devotee-app start",
+    "db:migrate": "pnpm --filter @mandir/api db:migrate",
+    "db:seed": "pnpm --filter @mandir/api db:seed",
+    "db:generate": "pnpm --filter @mandir/api db:generate",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "turbo": "^2.11.4",
+    "typescript": "~6.0.3"
+  }
+}

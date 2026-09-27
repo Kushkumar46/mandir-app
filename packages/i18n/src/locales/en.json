@@ -1,0 +1,18 @@
+{
+  "common": {
+    "appName": "Mandir",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "offline": "No internet connection",
+    "somethingWentWrong": "Something went wrong"
+  },
+  "update": {
+    "title": "A new version is available",
+    "body": "Please update the app to continue.",
+    "cta": "Update"
+  },
+  "home": {
+    "welcome": "🙏 Welcome",
+    "comingSoon": "Virtual Mandir is coming soon"
+  }
+}

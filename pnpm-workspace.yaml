@@ -1,0 +1,23 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Expo / React Native need a flat node_modules layout.
+nodeLinker: hoisted
+
+allowBuilds:
+  '@prisma/engines': true
+  prisma: true
+  '@nestjs/core': true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  '@swc/core': true
+  msgpackr-extract: true
+
+# Keep React Native tooling on the version matching Expo SDK 57's react-native.
+overrides:
+  '@react-native/metro-config': 0.86.3
+  # One React for the whole repo (Expo SDK 57 pins react 19.2.3; native builds need a single copy).
+  react: 19.2.3
+  react-dom: 19.2.3

@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn semantic tokens mapped onto the devotional palette (packages/ui, docs/01-architecture.md §8). */
+:root {
+  --background: #fffbf3;
+  --foreground: #2b1a10;
+  --card: #ffffff;
+  --card-foreground: #2b1a10;
+  --popover: #ffffff;
+  --popover-foreground: #2b1a10;
+  --primary: #e07a1f; /* saffron */
+  --primary-foreground: #ffffff;
+  --secondary: #fff6e5; /* cream */
+  --secondary-foreground: #6b1e1e;
+  --muted: #fff6e5;
+  --muted-foreground: #6e5a4a;
+  --accent: #fbe9c9;
+  --accent-foreground: #6b1e1e;
+  --destructive: #b3261e;
+  --border: #ead9bf;
+  --input: #ead9bf;
+  --ring: #d4a537; /* gold */
+  --chart-1: #e07a1f;
+  --chart-2: #6b1e1e;
+  --chart-3: #d4a537;
+  --chart-4: #2e7d32;
+  --chart-5: #6e5a4a;
+  --radius: 0.625rem;
+  --sidebar: #fff6e5;
+  --sidebar-foreground: #2b1a10;
+  --sidebar-primary: #6b1e1e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fbe9c9;
+  --sidebar-accent-foreground: #6b1e1e;
+  --sidebar-border: #ead9bf;
+  --sidebar-ring: #d4a537;
+}
+
+@theme inline {
+  /* Brand colours (bg-saffron, text-maroon …) */
+  --color-saffron: #e07a1f;
+  --color-maroon: #6b1e1e;
+  --color-gold: #d4a537;
+  --color-cream: #fff6e5;
+  --color-success: #2e7d32;
+
+  --font-sans: var(--font-sans), "Noto Sans Devanagari", system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

@@ -1,0 +1,50 @@
+// Foundation tables only. Module tables are added by each module's build tasks.
+// Convention: models are PascalCase/camelCase in code, snake_case in the database (@@map / @map).
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+/// Stub until the Auth module (docs/modules/00-auth-onboarding.md) owns this model.
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  phone     String?  @unique
+  name      String?
+  gotra     String?
+  city      String?
+  timezone  String   @default("Asia/Kolkata")
+  language  String   @default("hi")
+  role      Role     @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model FeatureFlag {
+  key            String   @id
+  enabled        Boolean  @default(false)
+  rolloutPercent Int      @default(100) @map("rollout_percent")
+  /// Empty array = all platforms. Values: android | ios | web
+  platforms      String[] @default([])
+  minAppVersion  String?  @map("min_app_version")
+  payload        Json?
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+}

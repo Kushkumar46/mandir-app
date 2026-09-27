@@ -1,0 +1,67 @@
+name: mandir
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mandir
+      POSTGRES_PASSWORD: mandir
+      POSTGRES_DB: mandir
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mandir']
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+
+  # Local S3 (ADR 0002). Production uses Cloudflare R2 with the same two-bucket layout.
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: 'true'
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+    ports:
+      - '9000:9000' # S3 API
+      - '9001:9001' # web console (rustfsadmin / rustfsadmin)
+    volumes:
+      - s3data:/data
+
+  # One-shot: creates both buckets; only media-public is anonymously readable (acts as the local CDN).
+  # media-private is never public — objects there are served via signed URLs only.
+  s3-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - rustfs
+    environment:
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -e
+        S3="aws --endpoint-url http://rustfs:9000 s3api"
+        for i in $$(seq 1 30); do $$S3 list-buckets >/dev/null 2>&1 && break; sleep 1; done
+        for b in media-public media-private; do
+          $$S3 head-bucket --bucket $$b >/dev/null 2>&1 || $$S3 create-bucket --bucket $$b
+        done
+        $$S3 put-bucket-policy --bucket media-public --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::media-public/*"]}]}'
+        echo "Buckets ready: media-public (public read), media-private (private)"
+
+volumes:
+  pgdata:
+  redisdata:
+  s3data:
