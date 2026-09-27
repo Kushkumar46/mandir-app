@@ -154,8 +154,10 @@ describe('Mandir offerings (e2e)', () => {
       expect(res.body.data as MakeOfferingResponse).toEqual({
         coinsBalance: 1,
         coinsSpent: 0,
-        streak: { current: 1, doneToday: true },
+        streak: { current: 1, longest: 1, doneToday: true },
         reward: { ruleKey: 'FIRST_DARSHAN_OF_DAY', coins: 1 },
+        rewards: [{ ruleKey: 'FIRST_DARSHAN_OF_DAY', coins: 1 }],
+        badgesEarned: [],
         todayOfferings: { flowers: 1, mala: false, diya: false, bhog: false },
       });
       const logs = await offeringLogs(userId);
@@ -257,7 +259,7 @@ describe('Mandir offerings (e2e)', () => {
       const userId = await newUser();
       await withFlag(MandirFlag.REWARDS, false, async () => {
         const res = await as(userId).offer(deity('ganesh').id, item('Marigold').id).expect(200);
-        expect(res.body.data).toMatchObject({ reward: null, coinsBalance: 0, streak: { current: 1, doneToday: true } });
+        expect(res.body.data).toMatchObject({ reward: null, rewards: [], coinsBalance: 0, streak: { current: 1, doneToday: true } });
       });
       expect(await rewardRows(userId)).toHaveLength(0);
     });
@@ -269,7 +271,7 @@ describe('Mandir offerings (e2e)', () => {
         data: { userId: continuing, current: 4, longest: 9, lastDate: addDays(today, -1) },
       });
       const res = await as(continuing).offer(deity('ganesh').id, item('Marigold').id).expect(200);
-      expect(res.body.data.streak).toEqual({ current: 5, doneToday: true });
+      expect(res.body.data.streak).toEqual({ current: 5, longest: 9, doneToday: true });
       await as(continuing).offer(deity('ganesh').id, item('Marigold').id).expect(200);
       expect(await prisma.userStreak.findUnique({ where: { userId: continuing } })).toMatchObject({
         current: 5,
@@ -280,7 +282,7 @@ describe('Mandir offerings (e2e)', () => {
       const broken = await newUser();
       await prisma.userStreak.create({ data: { userId: broken, current: 4, longest: 4, lastDate: addDays(today, -2) } });
       const res2 = await as(broken).offer(deity('ganesh').id, item('Marigold').id).expect(200);
-      expect(res2.body.data.streak).toEqual({ current: 1, doneToday: true });
+      expect(res2.body.data.streak).toEqual({ current: 1, longest: 4, doneToday: true });
       expect(await prisma.userStreak.findUnique({ where: { userId: broken } })).toMatchObject({ current: 1, longest: 4 });
     });
 

@@ -208,6 +208,8 @@ export const MANDIR_FLAGS: { key: string; enabled: boolean; description: string 
 export const MANDIR_REMOTE_CONFIG = {
   uploadMaxPerDay: 10,
   shareAppLink: null,
+  /** T7: seconds on VM-01 before the darshan ping; null = pings don't count for the streak (§6.3). */
+  darshanPingSeconds: 20,
 };
 
 /** Keys this module no longer reads; the seed removes them (free offerings are unlimited, §6.5). */

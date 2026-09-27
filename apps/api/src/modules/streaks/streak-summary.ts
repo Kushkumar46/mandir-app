@@ -1,3 +1,5 @@
+import { type BadgeKey, STREAK_BADGE_DAYS, streakBadgeKey } from '@mandir/shared-types';
+
 import { addDays } from '../../core/time/local-date.js';
 
 export interface StreakSummary {
@@ -35,4 +37,17 @@ export function nextStreak(row: StreakRow | null, localDate: string): StreakRow 
   if (row?.lastDate && row.lastDate >= localDate) return row;
   const current = row?.lastDate === addDays(localDate, -1) ? row.current + 1 : 1;
   return { current, longest: Math.max(row?.longest ?? 0, current), lastDate: localDate };
+}
+
+/** Streak badges a streak of `current` days has earned (§6.3), smallest first. */
+export function streakBadgesFor(current: number): BadgeKey[] {
+  return STREAK_BADGE_DAYS.filter((days) => current >= days).map(streakBadgeKey);
+}
+
+/** First and last day of a "YYYY-MM" month as local dates. */
+export function monthRange(month: string): { first: string; last: string } {
+  const first = `${month}-01`;
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  return { first, last: addDays(`${nextMonth}-01`, -1) };
 }

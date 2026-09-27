@@ -29,11 +29,12 @@ import { StorageService } from '../../core/storage/storage.service.js';
 import { localDateIn, weekdayOf } from '../../core/time/local-date.js';
 import type { Deity, OfferingItem, Prisma } from '../../generated/prisma/client.js';
 import { CoinsService } from '../coins/coins.service.js';
-import { RewardsService } from '../coins/rewards.service.js';
 import { ImagesService } from '../images/images.service.js';
 import { StreaksService } from '../streaks/streaks.service.js';
+import { deityNotAvailable, findActiveDeity } from './active-deity.js';
 import { pickDefaultDeity } from './default-deity.js';
 import { tithiText } from './panchang.js';
+import { RitualsService } from './rituals.service.js';
 
 const DEFAULT_THEME_KEY = 'default';
 const FIRST_DARSHAN_REWARD = 'FIRST_DARSHAN_OF_DAY';
@@ -48,7 +49,7 @@ interface MandirEntry {
   selectedImageId: string | null;
 }
 
-/** Mandir home, user deity list (T4), offerings (T6) and rituals (T7). */
+/** Mandir home, user deity list (T4) and offerings (T6); rituals live in RitualsService (T7). */
 @Injectable()
 export class MandirService {
   constructor(
@@ -57,8 +58,8 @@ export class MandirService {
     private readonly flags: FeatureFlagService,
     private readonly images: ImagesService,
     private readonly coins: CoinsService,
-    private readonly rewards: RewardsService,
     private readonly streaks: StreaksService,
+    private readonly rituals: RitualsService,
   ) {}
 
   /** `GET /v1/mandir/home` — everything VM-01 needs in one call. */
@@ -186,7 +187,7 @@ export class MandirService {
 
   /** `GET /v1/deities/:deityId/offerings` — valid items grouped by kind. */
   async deityOfferings(deityId: string, flagCtx: FlagContext): Promise<DeityOfferings> {
-    const [config] = await Promise.all([this.flags.getAppConfig(flagCtx), this.activeDeity(deityId)]);
+    const [config] = await Promise.all([this.flags.getAppConfig(flagCtx), findActiveDeity(this.prisma, deityId)]);
     const premiumOn = config.flags[MandirFlag.PREMIUM_OFFERINGS]?.enabled === true;
 
     const items = await this.prisma.offeringItem.findMany({
@@ -207,15 +208,15 @@ export class MandirService {
   }
 
   /**
-   * `POST /v1/mandir/offerings` — logs the offering, spends coins for a paid item, counts the darshan
-   * day (§6.3) and pays FIRST_DARSHAN_OF_DAY (§6.4), all in one transaction. Free offerings are
+   * `POST /v1/mandir/offerings` — logs the offering, spends coins for a paid item and runs the
+   * darshan-day step (streak, badges, FIRST_DARSHAN_OF_DAY + streak milestones, §6.3/§6.4), all in one transaction. Free offerings are
    * unlimited (§6.5); the controller throttles the route per user. The per-user lock, taken first,
    * keeps reward caps correct under concurrent requests and the lock order (user → wallet) fixed.
    */
   async makeOffering(user: AuthUser, body: MakeOfferingRequest, flagCtx: FlagContext): Promise<MakeOfferingResponse> {
     const [config, , item] = await Promise.all([
       this.flags.getAppConfig(flagCtx),
-      this.activeDeity(body.deityId),
+      findActiveDeity(this.prisma, body.deityId),
       this.prisma.offeringItem.findUnique({
         where: { id: body.offeringItemId },
         include: { deities: { select: { deityId: true } } },
@@ -255,19 +256,17 @@ export class MandirService {
         },
       });
 
-      const streak = await this.streaks.recordDarshanDay(tx, user.id, localDate);
-      const reward = isOn(MandirFlag.REWARDS)
-        ? await this.rewards.grant(tx, user.id, FIRST_DARSHAN_REWARD, { localDate, timezone: user.timezone })
-        : null;
-      if (reward) balance = reward.balance;
-      balance ??= (await tx.coinWallet.findUnique({ where: { userId: user.id } }))?.balance ?? 0;
+      const step = await this.rituals.recordDarshan(tx, user, localDate, isOn(MandirFlag.REWARDS));
+      balance = step.balance ?? balance ?? (await tx.coinWallet.findUnique({ where: { userId: user.id } }))?.balance ?? 0;
 
       const today = await this.todayOfferings(tx, user.id, localDate, [body.deityId]);
       return {
         coinsBalance: balance,
         coinsSpent: coinCost,
-        streak: { current: streak.current, doneToday: streak.doneToday },
-        reward: reward && { ruleKey: reward.ruleKey, coins: reward.coins },
+        streak: step.streak,
+        reward: step.rewards.find((r) => r.ruleKey === FIRST_DARSHAN_REWARD) ?? null,
+        rewards: step.rewards,
+        badgesEarned: step.badgesEarned,
         todayOfferings: today[body.deityId]!,
       };
     }, TX_OPTIONS);
@@ -306,12 +305,6 @@ export class MandirService {
       }
     }
     return result;
-  }
-
-  private async activeDeity(deityId: string): Promise<Deity> {
-    const deity = await this.prisma.deity.findUnique({ where: { id: deityId } });
-    if (!deity?.isActive) throw deityNotAvailable({ deityId });
-    return deity;
   }
 
   private offeringItemView(item: OfferingItem): OfferingItemView {
@@ -418,8 +411,4 @@ export class MandirService {
 
 function toImageRequest(e: MandirEntry) {
   return { deityId: e.deity.id, selectedImageId: e.selectedImageId, defaultImageId: e.deity.defaultImageId };
-}
-
-function deityNotAvailable(details: Record<string, unknown>) {
-  return new AppException(ErrorCode.DEITY_NOT_AVAILABLE, 'Deity not available', HttpStatus.NOT_FOUND, details);
 }

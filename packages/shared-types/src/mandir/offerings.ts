@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { todayOfferingsSchema } from './home';
+import { darshanOutcomeSchema, rewardGrantSchema } from './rituals';
 
 // `GET /v1/deities/:deityId/offerings`, `POST /v1/mandir/offerings`
 // (docs/modules/01-virtual-mandir.md §7 "Mandir", rules §6.3–§6.5).
@@ -41,15 +42,12 @@ export const makeOfferingRequestSchema = z.object({
 });
 export type MakeOfferingRequest = z.infer<typeof makeOfferingRequestSchema>;
 
-/** A reward rule that paid out (§6.4). */
-export const rewardGrantSchema = z.object({ ruleKey: z.string(), coins: z.number().int().min(1) });
-export type RewardGrant = z.infer<typeof rewardGrantSchema>;
-
-export const makeOfferingResponseSchema = z.object({
-  /** Balance after the spend and any reward. */
-  coinsBalance: z.number().int().min(0),
+/**
+ * Darshan-day outcome (`coinsBalance`, `streak`, `rewards`, `badgesEarned`, see rituals.ts) plus the
+ * offering's own fields. `reward` is the FIRST_DARSHAN_OF_DAY payout (T6 contract); `rewards` lists every payout.
+ */
+export const makeOfferingResponseSchema = darshanOutcomeSchema.extend({
   coinsSpent: z.number().int().min(0),
-  streak: z.object({ current: z.number().int().min(0), doneToday: z.boolean() }),
   reward: rewardGrantSchema.nullable(),
   /** Today's offerings for this deity, including this one. */
   todayOfferings: todayOfferingsSchema,

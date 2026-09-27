@@ -1,4 +1,4 @@
-import { nextStreak, streakSummary } from './streak-summary.js';
+import { monthRange, nextStreak, streakBadgesFor, streakSummary } from './streak-summary.js';
 
 describe('nextStreak (§6.3)', () => {
   const row = (current: number, longest: number, lastDate: string | null) => ({ current, longest, lastDate });
@@ -43,5 +43,25 @@ describe('streakSummary', () => {
 
   it('older last day → broken streak shows 0, longest kept', () => {
     expect(streakSummary(row('2026-09-27'), '2026-09-29')).toEqual({ current: 0, longest: 12, doneToday: false });
+  });
+});
+
+describe('streakBadgesFor', () => {
+  it('badges for every threshold reached', () => {
+    expect(streakBadgesFor(0)).toEqual([]);
+    expect(streakBadgesFor(6)).toEqual([]);
+    expect(streakBadgesFor(7)).toEqual(['STREAK_7']);
+    expect(streakBadgesFor(50)).toEqual(['STREAK_7', 'STREAK_21']);
+    expect(streakBadgesFor(51)).toEqual(['STREAK_7', 'STREAK_21', 'STREAK_51']);
+    expect(streakBadgesFor(400)).toEqual(['STREAK_7', 'STREAK_21', 'STREAK_51', 'STREAK_108']);
+  });
+});
+
+describe('monthRange', () => {
+  it('first and last day, incl. February and December', () => {
+    expect(monthRange('2026-09')).toEqual({ first: '2026-09-01', last: '2026-09-30' });
+    expect(monthRange('2026-02')).toEqual({ first: '2026-02-01', last: '2026-02-28' });
+    expect(monthRange('2028-02')).toEqual({ first: '2028-02-01', last: '2028-02-29' });
+    expect(monthRange('2026-12')).toEqual({ first: '2026-12-01', last: '2026-12-31' });
   });
 });

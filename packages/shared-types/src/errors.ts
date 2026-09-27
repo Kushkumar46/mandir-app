@@ -30,6 +30,12 @@ export const ErrorCode = {
   IMAGE_NOT_AVAILABLE: 'IMAGE_NOT_AVAILABLE',
   /** 404 — offering item unknown, inactive or not offered to this deity (§6.5). */
   ITEM_NOT_AVAILABLE: 'ITEM_NOT_AVAILABLE',
+  /** 404 — aarti unknown, inactive or of another deity. */
+  AARTI_NOT_AVAILABLE: 'AARTI_NOT_AVAILABLE',
+  /** 422 — aarti completion rule not met; `details: { playedRatio, circles, minPlayedRatio, minCircles }`. */
+  AARTI_INCOMPLETE: 'AARTI_INCOMPLETE',
+  /** 422 — darshan ping shorter than `darshanPingSeconds`; `details: { seconds, minSeconds }`. */
+  DARSHAN_TOO_SHORT: 'DARSHAN_TOO_SHORT',
 
   // Coins
   /** 402 — balance too low; `details: { required, balance }`. */

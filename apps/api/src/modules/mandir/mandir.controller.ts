@@ -1,5 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import {
+  type AartiCompleteRequest,
+  aartiCompleteRequestSchema,
+  type AartiCompleteResponse,
+  type DarshanPingRequest,
+  darshanPingRequestSchema,
+  type DarshanPingResponse,
   type MakeOfferingRequest,
   makeOfferingRequestSchema,
   type MakeOfferingResponse,
@@ -16,21 +22,26 @@ import {
 import type { Request } from 'express';
 
 import { type AuthUser, CurrentUser } from '../../core/auth/auth.decorators.js';
-import { AppException } from '../../core/errors/app.exception.js';
 import { flagContextFromRequest } from '../../core/feature-flags/flag-context.js';
 import { RequireFlag } from '../../core/feature-flags/require-flag.guard.js';
 import { Idempotent } from '../../core/idempotency/idempotency.interceptor.js';
 import { ZodValidationPipe } from '../../core/validation/zod-validation.pipe.js';
 import { UserThrottle } from '../../core/throttle/user-throttle.guard.js';
 import { MandirService } from './mandir.service.js';
+import { RitualsService } from './rituals.service.js';
 
 /** §6.5 technical throttle on `POST /mandir/offerings`, per user. */
 export const OFFERINGS_PER_MINUTE = 60;
+/** Per-user throttle on `POST /mandir/rituals/aarti-complete` (§7 "T7 contract notes"). */
+export const AARTI_COMPLETIONS_PER_MINUTE = 20;
 
-// docs/modules/01-virtual-mandir.md §7 "Mandir"; remaining stubs are replaced by their build tasks.
+// docs/modules/01-virtual-mandir.md §7 "Mandir".
 @Controller('mandir')
 export class MandirController {
-  constructor(private readonly mandir: MandirService) {}
+  constructor(
+    private readonly mandir: MandirService,
+    private readonly rituals: RitualsService,
+  ) {}
 
   @Get('home')
   @RequireFlag(MandirFlag.ENABLED)
@@ -70,13 +81,27 @@ export class MandirController {
     return this.mandir.makeOffering(user, body, flagContextFromRequest(req));
   }
 
+  // Idempotent because it pays rewards; a retried completion must not log (or pay) twice.
   @Post('rituals/aarti-complete')
-  aartiComplete() {
-    throw AppException.notImplemented('T7');
+  @HttpCode(HttpStatus.OK)
+  @UserThrottle(AARTI_COMPLETIONS_PER_MINUTE)
+  @Idempotent()
+  aartiComplete(
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request & { user?: AuthUser },
+    @Body(new ZodValidationPipe(aartiCompleteRequestSchema)) body: AartiCompleteRequest,
+  ): Promise<AartiCompleteResponse> {
+    return this.rituals.aartiComplete(user, body, flagContextFromRequest(req));
   }
 
+  // A repeat is a no-op for the day (one DARSHAN log per local day), so no Idempotency-Key.
   @Post('rituals/darshan')
-  darshan() {
-    throw AppException.notImplemented('T7');
+  @HttpCode(HttpStatus.OK)
+  darshan(
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request & { user?: AuthUser },
+    @Body(new ZodValidationPipe(darshanPingRequestSchema)) body: DarshanPingRequest,
+  ): Promise<DarshanPingResponse> {
+    return this.rituals.darshanPing(user, body, flagContextFromRequest(req));
   }
 }
