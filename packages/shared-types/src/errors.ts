@@ -36,6 +36,12 @@ export const ErrorCode = {
   AARTI_INCOMPLETE: 'AARTI_INCOMPLETE',
   /** 422 — darshan ping shorter than `darshanPingSeconds`; `details: { seconds, minSeconds }`. */
   DARSHAN_TOO_SHORT: 'DARSHAN_TOO_SHORT',
+  /** 404 — thali design unknown or inactive (§6.8). */
+  THALI_NOT_AVAILABLE: 'THALI_NOT_AVAILABLE',
+  /** 403 — thali design is neither free nor unlocked by the user (§6.8). */
+  THALI_LOCKED: 'THALI_LOCKED',
+  /** 409 — permanent item already unlocked, or free (§6.8). */
+  ALREADY_UNLOCKED: 'ALREADY_UNLOCKED',
 
   // Coins
   /** 402 — balance too low; `details: { required, balance }`. */

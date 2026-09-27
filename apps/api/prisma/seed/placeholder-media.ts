@@ -59,6 +59,31 @@ export async function deityImage(label: string, colors: [string, string]): Promi
   };
 }
 
+/**
+ * Top-down 512×512 thali (§12): a rimmed plate with a diya at each flame anchor — one in the centre
+ * for "single", five in a ring for "pancha".
+ */
+export function thaliImage(color: string, flameStyle: 'single' | 'pancha'): Promise<Buffer> {
+  const size = 512;
+  const c = size / 2;
+  const anchors =
+    flameStyle === 'pancha'
+      ? Array.from({ length: 5 }, (_, i) => {
+          const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+          return [c + Math.cos(a) * c * 0.5, c + Math.sin(a) * c * 0.5] as const;
+        })
+      : [[c, c] as const];
+  const diyas = anchors
+    .map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="34" ry="24" fill="#A1662F"/><circle cx="${x}" cy="${y - 10}" r="12" fill="#FFB300"/>`)
+    .join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+  <circle cx="${c}" cy="${c}" r="${c * 0.96}" fill="${color}"/>
+  <circle cx="${c}" cy="${c}" r="${c * 0.82}" fill="none" stroke="#FFF6E5" stroke-opacity="0.5" stroke-width="6"/>
+  ${diyas}
+</svg>`;
+  return sharp(Buffer.from(svg)).webp({ quality: 85 }).toBuffer();
+}
+
 /** Transparent square sprite: a coloured disc with petals — enough to see particles move. */
 export function offeringSprite(color: string, size: number): Promise<Buffer> {
   const c = size / 2;

@@ -5,7 +5,7 @@ import { paginationQuerySchema } from '../api';
 // Coins API contracts (docs/modules/01-virtual-mandir.md §7 "Coins"). Packs, reward rules and the
 // RevenueCat webhook are added by T15.
 
-export const coinTxnReasonSchema = z.enum(['PURCHASE', 'OFFERING', 'REWARD', 'REFUND', 'ADMIN_ADJUST']);
+export const coinTxnReasonSchema = z.enum(['PURCHASE', 'OFFERING', 'REWARD', 'REFUND', 'ADMIN_ADJUST', 'UNLOCK']);
 export type CoinTxnReason = z.infer<typeof coinTxnReasonSchema>;
 
 /** `GET /v1/coins/wallet` — server-authoritative balance (0 when the user has no wallet yet). */
@@ -18,7 +18,7 @@ export const coinTransactionSchema = z.object({
   amount: z.number().int(),
   balanceAfter: z.number().int().min(0),
   reason: coinTxnReasonSchema,
-  /** "offering" | "purchase" | "reward_rule" | "admin" */
+  /** "offering" | "purchase" | "reward_rule" | "admin" | "unlock" */
   refType: z.string().nullable(),
   refId: z.string().nullable(),
   createdAt: z.iso.datetime(),

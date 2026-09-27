@@ -11,6 +11,7 @@ export const MandirFlag = {
   SHARE_CARD: 'mandir.share_card',
   FESTIVAL_THEMES: 'mandir.festival_themes',
   STARTUP_SHANKH_SOUND: 'mandir.startup_shankh_sound',
+  THALI_DESIGNS: 'mandir.thali_designs',
 } as const;
 
 export type MandirFlag = (typeof MandirFlag)[keyof typeof MandirFlag];

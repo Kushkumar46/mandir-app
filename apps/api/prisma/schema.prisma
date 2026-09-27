@@ -40,6 +40,8 @@ model User {
   streak         UserStreak?
   badges         UserBadge[]
   coinWallet     CoinWallet?
+  unlocks        UserUnlock[]
+  mandirSettings UserMandirSettings?
 
   @@map("users")
 }
@@ -100,6 +102,13 @@ enum CoinTxnReason {
   REWARD
   REFUND
   ADMIN_ADJUST
+  /// Spend on a permanent unlock (refType "unlock", refId = UserUnlock.id), T7b
+  UNLOCK
+}
+
+/// Item types a user can buy once and keep (UserUnlock.itemType). One value + migration per new type.
+enum UnlockItemType {
+  THALI
 }
 
 model Deity {
@@ -297,6 +306,8 @@ model RitualLog {
   action         RitualAction
   offeringItemId String?       @map("offering_item_id") @db.Uuid
   aartiId        String?       @map("aarti_id") @db.Uuid
+  /// Thali used for AARTI_COMPLETE (T7b)
+  thaliId        String?       @map("thali_id") @db.Uuid
   coinsSpent     Int           @default(0) @map("coins_spent")
   /// "YYYY-MM-DD" in user's timezone
   localDate      String        @map("local_date")
@@ -304,6 +315,7 @@ model RitualLog {
   deity          Deity         @relation(fields: [deityId], references: [id])
   offeringItem   OfferingItem? @relation(fields: [offeringItemId], references: [id], onDelete: SetNull)
   aarti          Aarti?        @relation(fields: [aartiId], references: [id], onDelete: SetNull)
+  thali          ThaliDesign?  @relation(fields: [thaliId], references: [id], onDelete: SetNull)
   createdAt      DateTime      @default(now()) @map("created_at")
 
   @@index([userId, localDate])
@@ -419,4 +431,55 @@ model RewardRule {
   isActive Boolean @default(true) @map("is_active")
 
   @@map("reward_rules")
+}
+
+// ---- Thali designs + permanent unlocks (docs/modules/01-virtual-mandir.md §5 "Thali designs", §6.8; T7b) ----
+
+model ThaliDesign {
+  id         String               @id @default(uuid()) @db.Uuid
+  nameHi     String               @map("name_hi")
+  nameEn     String               @map("name_en")
+  /// public-bucket object key (like OfferingItem.iconUrl)
+  imageKey   String               @map("image_key")
+  /// "single" | "pancha" | … — flame layout/animation preset for §4.3
+  flameStyle String               @map("flame_style")
+  /// 0 = free (always usable, never needs an unlock row)
+  coinCost   Int                  @default(0) @map("coin_cost")
+  isActive   Boolean              @default(true) @map("is_active")
+  sortOrder  Int                  @default(0) @map("sort_order")
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+  selectedBy UserMandirSettings[]
+  ritualLogs RitualLog[]
+
+  @@map("thali_designs")
+}
+
+/// Generic "bought once, usable forever" ownership. `itemId` points into the table named by `itemType`
+/// (no FK, so one table serves every item type); rows are never deleted when an item is deactivated.
+model UserUnlock {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @map("user_id") @db.Uuid
+  itemType   UnlockItemType @map("item_type")
+  itemId     String         @map("item_id") @db.Uuid
+  coinsSpent Int            @map("coins_spent")
+  unlockedAt DateTime       @default(now()) @map("unlocked_at")
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemType, itemId])
+  @@index([userId, itemType])
+  @@map("user_unlocks")
+}
+
+/// Per-user mandir settings (one row per user, created on first write).
+model UserMandirSettings {
+  userId          String       @id @map("user_id") @db.Uuid
+  /// null = the default free thali
+  selectedThaliId String?      @map("selected_thali_id") @db.Uuid
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selectedThali   ThaliDesign? @relation(fields: [selectedThaliId], references: [id], onDelete: SetNull)
+
+  @@index([selectedThaliId])
+  @@map("user_mandir_settings")
 }

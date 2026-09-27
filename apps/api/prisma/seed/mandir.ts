@@ -24,6 +24,7 @@ import {
   RETIRED_OFFERING_KEYS,
   REWARD_RULES,
   type SeedDeity,
+  THALIS,
 } from './mandir-data.js';
 import {
   aartiTone,
@@ -31,6 +32,7 @@ import {
   type ImageVariant,
   lyricsTimeline,
   offeringSprite,
+  thaliImage,
   themeFrame,
 } from './placeholder-media.js';
 
@@ -42,6 +44,7 @@ export async function seedMandir(prisma: PrismaClient, storage: StorageService):
     deityIds.set(deity.slug, await seedDeity(prisma, storage, deity, index));
   }
   await seedOfferings(prisma, storage, deityIds);
+  await seedThalis(prisma, storage);
   await seedCoinPacks(prisma);
   await seedRewardRules(prisma);
   await seedFlags(prisma);
@@ -186,6 +189,27 @@ async function seedOfferings(
     where: { id: { in: RETIRED_OFFERING_KEYS.map((key) => seedId(`offering:${key}`)) }, isActive: true },
     data: { isActive: false },
   });
+}
+
+async function seedThalis(prisma: PrismaClient, storage: StorageService): Promise<void> {
+  for (const [sortOrder, t] of THALIS.entries()) {
+    const id = seedId(`thali:${t.key}`);
+    const imageKey = `official/thalis/${t.key}/image.webp`;
+    await storage.put(imageKey, await thaliImage(t.color, t.flameStyle), 'image/webp');
+    await prisma.thaliDesign.upsert({
+      where: { id },
+      update: {},
+      create: {
+        id,
+        nameHi: t.nameHi,
+        nameEn: t.nameEn,
+        imageKey,
+        flameStyle: t.flameStyle,
+        coinCost: t.coinCost,
+        sortOrder,
+      },
+    });
+  }
 }
 
 async function seedCoinPacks(prisma: PrismaClient): Promise<void> {

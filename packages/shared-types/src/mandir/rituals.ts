@@ -52,6 +52,8 @@ export const aartiCompleteRequestSchema = z.object({
   playedRatio: z.number().min(0).max(1),
   /** Full thali circles, manual or Auto. */
   circles: z.number().int().min(0),
+  /** Thali used (T7b); must be free or unlocked. Omitted = the user's selection. */
+  thaliId: z.uuid().optional(),
 });
 export type AartiCompleteRequest = z.infer<typeof aartiCompleteRequestSchema>;
 

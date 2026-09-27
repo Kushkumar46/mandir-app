@@ -35,6 +35,7 @@ import { deityNotAvailable, findActiveDeity } from './active-deity.js';
 import { pickDefaultDeity } from './default-deity.js';
 import { tithiText } from './panchang.js';
 import { RitualsService } from './rituals.service.js';
+import { ThalisService } from './thalis.service.js';
 
 const DEFAULT_THEME_KEY = 'default';
 const FIRST_DARSHAN_REWARD = 'FIRST_DARSHAN_OF_DAY';
@@ -60,6 +61,7 @@ export class MandirService {
     private readonly coins: CoinsService,
     private readonly streaks: StreaksService,
     private readonly rituals: RitualsService,
+    private readonly thalis: ThalisService,
   ) {}
 
   /** `GET /v1/mandir/home` — everything VM-01 needs in one call. */
@@ -72,7 +74,7 @@ export class MandirService {
     const isOn = (key: MandirFlag) => config.flags[key]?.enabled === true;
     const deityIds = entries.map((e) => e.deity.id);
 
-    const [images, theme, specials, aartis, todayOfferings, balance, streak] = await Promise.all([
+    const [images, theme, specials, aartis, todayOfferings, balance, streak, thali] = await Promise.all([
       this.images.resolveForDeities(user.id, entries.map(toImageRequest)),
       this.activeTheme(now, isOn(MandirFlag.FESTIVAL_THEMES)),
       isOn(MandirFlag.OFFERINGS)
@@ -82,6 +84,8 @@ export class MandirService {
       this.todayOfferings(this.prisma, user.id, localDate, deityIds),
       this.coins.getBalance(user.id),
       this.streaks.summary(user.id, localDate),
+      // Flag off → the default free thali (§7 "Thali contract").
+      this.thalis.resolve(this.prisma, user.id, isOn(MandirFlag.THALI_DESIGNS)),
     ]);
 
     return {
@@ -106,6 +110,7 @@ export class MandirService {
       todayOfferings,
       coins: { balance },
       streak,
+      thali: this.thalis.homeView(thali),
     };
   }
 

@@ -32,6 +32,7 @@ import { RewardsService } from '../coins/rewards.service.js';
 import type { StreakSummary } from '../streaks/streak-summary.js';
 import { StreaksService } from '../streaks/streaks.service.js';
 import { findActiveDeity } from './active-deity.js';
+import { ThalisService } from './thalis.service.js';
 
 const FIRST_DARSHAN_REWARD = 'FIRST_DARSHAN_OF_DAY';
 const AARTI_COMPLETE_REWARD = 'AARTI_COMPLETE';
@@ -57,6 +58,7 @@ export class RitualsService {
     private readonly coins: CoinsService,
     private readonly rewards: RewardsService,
     private readonly streaks: StreaksService,
+    private readonly thalis: ThalisService,
   ) {}
 
   /** `GET /v1/deities/:deityId/aartis` — active aartis, default first, then newest version. */
@@ -82,8 +84,8 @@ export class RitualsService {
   }
 
   /**
-   * `POST /v1/mandir/rituals/aarti-complete` — checks the VM-06 completion rule, logs the aarti, counts
-   * the darshan day and pays AARTI_COMPLETE (2/day), all in one transaction.
+   * `POST /v1/mandir/rituals/aarti-complete` — checks the VM-06 completion rule, logs the aarti with the
+   * thali used (T7b), counts the darshan day and pays AARTI_COMPLETE (2/day), all in one transaction.
    */
   async aartiComplete(user: AuthUser, body: AartiCompleteRequest, flagCtx: FlagContext): Promise<AartiCompleteResponse> {
     const [config, , aarti] = await Promise.all([
@@ -105,13 +107,15 @@ export class RitualsService {
         minCircles: AARTI_MIN_CIRCLES,
       });
     }
-    const rewardsOn = config.flags[MandirFlag.REWARDS]?.enabled === true;
+    const isOn = (key: MandirFlag) => config.flags[key]?.enabled === true;
+    const rewardsOn = isOn(MandirFlag.REWARDS);
     const localDate = localDateIn(user.timezone);
 
     return this.prisma.$transaction(async (tx) => {
       await lockUser(tx, user.id);
+      const thaliId = await this.thalis.forAarti(tx, user.id, body.thaliId, isOn(MandirFlag.THALI_DESIGNS));
       const log = await tx.ritualLog.create({
-        data: { userId: user.id, deityId: body.deityId, action: 'AARTI_COMPLETE', aartiId: aarti.id, localDate },
+        data: { userId: user.id, deityId: body.deityId, action: 'AARTI_COMPLETE', aartiId: aarti.id, thaliId, localDate },
         select: { id: true },
       });
       const step = await this.recordDarshan(tx, user, localDate, rewardsOn);

@@ -202,6 +202,27 @@ export const MANDIR_FLAGS: { key: string; enabled: boolean; description: string 
   { key: MandirFlag.SHARE_CARD, enabled: true, description: 'Virtual Mandir: share card' },
   { key: MandirFlag.FESTIVAL_THEMES, enabled: false, description: 'Virtual Mandir: festival theme switching' },
   { key: MandirFlag.STARTUP_SHANKH_SOUND, enabled: true, description: 'Virtual Mandir: shankh on first open of day' },
+  // Seeded off until the app side (T13) ships; launch default is on (§9).
+  { key: MandirFlag.THALI_DESIGNS, enabled: false, description: 'Virtual Mandir: thali designs (picker, unlock, select)' },
+];
+
+/**
+ * §12 seed thalis: one free default (lowest sortOrder among free designs) + three premium.
+ * Coin costs are placeholders (set in admin).
+ */
+export const THALIS: {
+  key: string;
+  nameHi: string;
+  nameEn: string;
+  flameStyle: 'single' | 'pancha';
+  coinCost: number;
+  /** Placeholder plate colour. */
+  color: string;
+}[] = [
+  { key: 'pital', nameHi: 'पीतल की थाली', nameEn: 'Brass thali', flameStyle: 'single', coinCost: 0, color: '#B5A642' },
+  { key: 'chaandi', nameHi: 'चाँदी की थाली', nameEn: 'Silver thali', flameStyle: 'single', coinCost: 51, color: '#C0C0C0' },
+  { key: 'sone', nameHi: 'सोने की थाली', nameEn: 'Gold thali', flameStyle: 'single', coinCost: 108, color: '#D4A537' },
+  { key: 'pancha-deep', nameHi: 'पंचदीप थाली', nameEn: 'Pancha-deep thali', flameStyle: 'pancha', coinCost: 151, color: '#C9812B' },
 ];
 
 /** Remote config keys this module reads (§7 Config); merged into `app.remote_config` if missing. */

@@ -68,6 +68,15 @@ export const mandirThemeSchema = z.object({
 });
 export type MandirTheme = z.infer<typeof mandirThemeSchema>;
 
+/** The thali VM-01 draws (T7b): the user's resolved selection. */
+export const homeThaliSchema = z.object({
+  id: z.uuid(),
+  imageUrl: z.url(),
+  /** "single" | "pancha" | … — flame layout preset (§4.3). */
+  flameStyle: z.string(),
+});
+export type HomeThali = z.infer<typeof homeThaliSchema>;
+
 export const mandirHomeSchema = z.object({
   today: z.object({
     /** "YYYY-MM-DD" in the user's timezone. */
@@ -84,6 +93,8 @@ export const mandirHomeSchema = z.object({
   todayOfferings: z.record(z.string(), todayOfferingsSchema),
   coins: z.object({ balance: z.number().int() }),
   streak: z.object({ current: z.number().int(), longest: z.number().int(), doneToday: z.boolean() }),
+  /** Null only when no active free thali design exists. */
+  thali: homeThaliSchema.nullable(),
 });
 export type MandirHome = z.infer<typeof mandirHomeSchema>;
 

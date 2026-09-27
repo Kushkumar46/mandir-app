@@ -17,6 +17,11 @@ import {
   type SetMandirDeitiesRequest,
   setMandirDeitiesRequestSchema,
   type SetMandirDeitiesResponse,
+  type SelectThaliRequest,
+  selectThaliRequestSchema,
+  type SelectThaliResponse,
+  type ThaliList,
+  type UnlockThaliResponse,
   uuidSchema,
 } from '@mandir/shared-types';
 import type { Request } from 'express';
@@ -29,11 +34,14 @@ import { ZodValidationPipe } from '../../core/validation/zod-validation.pipe.js'
 import { UserThrottle } from '../../core/throttle/user-throttle.guard.js';
 import { MandirService } from './mandir.service.js';
 import { RitualsService } from './rituals.service.js';
+import { ThalisService } from './thalis.service.js';
 
 /** §6.5 technical throttle on `POST /mandir/offerings`, per user. */
 export const OFFERINGS_PER_MINUTE = 60;
 /** Per-user throttle on `POST /mandir/rituals/aarti-complete` (§7 "T7 contract notes"). */
 export const AARTI_COMPLETIONS_PER_MINUTE = 20;
+/** Per-user throttle on `POST /mandir/thalis/:thaliId/unlock` (§7 "Thali contract"). */
+export const THALI_UNLOCKS_PER_MINUTE = 20;
 
 // docs/modules/01-virtual-mandir.md §7 "Mandir".
 @Controller('mandir')
@@ -41,6 +49,7 @@ export class MandirController {
   constructor(
     private readonly mandir: MandirService,
     private readonly rituals: RitualsService,
+    private readonly thalis: ThalisService,
   ) {}
 
   @Get('home')
@@ -92,6 +101,34 @@ export class MandirController {
     @Body(new ZodValidationPipe(aartiCompleteRequestSchema)) body: AartiCompleteRequest,
   ): Promise<AartiCompleteResponse> {
     return this.rituals.aartiComplete(user, body, flagContextFromRequest(req));
+  }
+
+  @Get('thalis')
+  @RequireFlag(MandirFlag.THALI_DESIGNS)
+  listThalis(@CurrentUser() user: AuthUser): Promise<ThaliList> {
+    return this.thalis.list(user.id);
+  }
+
+  // Spends coins once per design (§6.8).
+  @Post('thalis/:thaliId/unlock')
+  @HttpCode(HttpStatus.OK)
+  @RequireFlag(MandirFlag.THALI_DESIGNS)
+  @UserThrottle(THALI_UNLOCKS_PER_MINUTE)
+  @Idempotent()
+  unlockThali(
+    @CurrentUser() user: AuthUser,
+    @Param('thaliId', new ZodValidationPipe(uuidSchema)) thaliId: string,
+  ): Promise<UnlockThaliResponse> {
+    return this.thalis.unlock(user.id, thaliId);
+  }
+
+  @Put('thali')
+  @RequireFlag(MandirFlag.THALI_DESIGNS)
+  selectThali(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(selectThaliRequestSchema)) body: SelectThaliRequest,
+  ): Promise<SelectThaliResponse> {
+    return this.thalis.select(user.id, body.thaliId);
   }
 
   // A repeat is a no-op for the day (one DARSHAN log per local day), so no Idempotency-Key.
