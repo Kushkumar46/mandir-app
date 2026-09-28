@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createQueryClient, subscribeAppFocus } from '@/api/query-client';
 import { ConfigGate } from '@/features/shell/ConfigGate';
+import { ToastHost } from '@/features/shell/Toast';
 import i18n from '@/lib/i18n';
 import { colors } from '@/theme';
 import { fontAssets } from '@/theme/fonts';
@@ -38,6 +39,7 @@ export default function RootLayout() {
                 screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}
               />
             </ConfigGate>
+            <ToastHost />
           </QueryClientProvider>
         </I18nextProvider>
       </SafeAreaProvider>

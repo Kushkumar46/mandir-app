@@ -5,7 +5,9 @@
     "retry": "Try again",
     "offline": "No internet connection",
     "somethingWentWrong": "Something went wrong",
-    "serverUnreachable": "Cannot reach the server. Check your internet and try again."
+    "serverUnreachable": "Cannot reach the server. Check your internet and try again.",
+    "back": "Back",
+    "connectInternet": "Connect to the internet"
   },
   "update": {
     "title": "A new version is available",
@@ -19,8 +21,34 @@
   "mandir": {
     "todayDarshan": "Today's darshan",
     "coins": "{{count}} coins",
-    "comingSoon": "The full mandir is coming soon",
-    "disabled": "The mandir is not available right now"
+    "coinsA11y": "{{count}} coins. View coins",
+    "comingSoon": "This is coming soon",
+    "disabled": "The mandir is not available right now",
+    "dayChip": "{{weekday}} Divya Darshan",
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "addDeity": "Add deity",
+    "sceneA11y": "Darshan of {{name}}",
+    "bell": "Ring the bell",
+    "rail": {
+      "flower": "Flowers",
+      "mala": "Mala",
+      "diya": "Diya",
+      "bhog": "Bhog",
+      "sangrah": "Sangrah"
+    },
+    "aarti": "Do aarti",
+    "offerSpecial": "Offer {{name}}",
+    "listen": "Listen",
+    "emptyMandir": "There are no deities in your mandir",
+    "openSangrah": "Choose deities"
   },
   "profile": {
     "title": "Profile",

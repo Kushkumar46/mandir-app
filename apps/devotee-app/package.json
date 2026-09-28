@@ -13,7 +13,10 @@
     "doctor": "expo-doctor"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "setupFiles": [
+      "./jest.setup.js"
+    ]
   },
   "dependencies": {
     "@expo-google-fonts/noto-sans-devanagari": "^0.4.1",
@@ -45,6 +48,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.0",
