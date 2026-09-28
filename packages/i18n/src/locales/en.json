@@ -105,6 +105,7 @@
       "loadFailed": "Could not load the aarti",
       "none": "No aarti available right now",
       "unavailable": "This aarti is not available right now",
+      "notDownloaded": "This aarti hasn't been downloaded yet. Connect to the internet.",
       "confirmTitle": "Aarti not finished",
       "confirmBody": "Do you want to stop the aarti midway?",
       "continue": "Continue aarti",
@@ -112,6 +113,7 @@
       "done": "Aarti complete 🙏",
       "saving": "Saving…",
       "saveFailed": "Could not save the aarti",
+      "queued": "The aarti will be saved when you're back online",
       "streak_one": "🔥 {{count}}-day streak",
       "streak_other": "🔥 {{count}}-day streak",
       "share": "Share darshan"

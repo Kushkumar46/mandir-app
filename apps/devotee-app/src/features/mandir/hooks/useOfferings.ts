@@ -19,8 +19,10 @@ import { useFlag } from '@/features/config/flags';
 import { showToast } from '@/features/shell/Toast';
 import { track } from '@/lib/analytics';
 import { impactMedium } from '@/lib/haptics';
+import { newIdempotencyKey } from '@/lib/uuid';
 
 import { preloadParticleSprites } from '../components/offerings/ParticleShower';
+import { queueOffering } from '../offline-queue';
 import { decideOffering, offeringAnimation } from '../offerings';
 import { useOfferingStore } from '../store/offerings';
 import { useRewardToast } from './useRewardToast';
@@ -85,8 +87,8 @@ type Flow = {
 };
 
 /**
- * VM-05 tap (§3.2): free → animation at once, logged in the background (a failed log is skipped
- * silently; the offline queue comes with T14); paid → `POST /mandir/offerings` first, animation on
+ * VM-05 tap (§3.2): free → animation at once, logged in the background (offline or a network
+ * failure → offline queue, T14; other failures are skipped silently); paid → `POST /mandir/offerings` first, animation on
  * success; not enough coins → placeholder coin sheet. Coins pill and feet area update from the
  * server's answer; rewards and new badges show a toast.
  */
@@ -125,14 +127,24 @@ export function useOfferingFlow({ deityId, balance, today, offline }: Flow) {
       store.closeSheet();
       store.play(deityId, item, today);
       impactMedium();
-      mutation.mutate(body, {
-        onSuccess: (res) => onMade(item, res),
-        onError: (e) => {
-          // 429 / offline: keep the animation, skip the log (§6.5; queue in T14).
-          if (e instanceof ApiError && e.status === 404) unavailable(e);
-          else if (e instanceof ApiError && e.code === ErrorCode.FEATURE_DISABLED) unavailable(e);
+      const idempotencyKey = newIdempotencyKey();
+      // Offline (T14): queued with its key and sent when the app is back online.
+      if (offline) {
+        track('offering_made', { itemId: item.id, kind: item.kind, coins: 0 });
+        return queueOffering(queryClient, body, item.kind, idempotencyKey);
+      }
+      mutation.mutate(
+        { body, idempotencyKey },
+        {
+          onSuccess: (res) => onMade(item, res),
+          onError: (e) => {
+            if (e instanceof ApiError && e.isNetworkError) queueOffering(queryClient, body, item.kind, idempotencyKey);
+            // 429: keep the animation, skip the log (§6.5).
+            else if (e instanceof ApiError && e.status === 404) unavailable(e);
+            else if (e instanceof ApiError && e.code === ErrorCode.FEATURE_DISABLED) unavailable(e);
+          },
         },
-      });
+      );
       return;
     }
 
@@ -142,7 +154,7 @@ export function useOfferingFlow({ deityId, balance, today, offline }: Flow) {
       return;
     }
     store.setPending(item.id);
-    mutation.mutate(body, {
+    mutation.mutate({ body, idempotencyKey: newIdempotencyKey() }, {
       onSuccess: (res) => {
         const s = useOfferingStore.getState();
         s.closeSheet();

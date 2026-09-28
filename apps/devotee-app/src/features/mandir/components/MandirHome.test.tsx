@@ -4,6 +4,7 @@ import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
 import { ApiError, apiRequest } from '@/api/client';
+import { useConnectivityStore } from '@/api/connectivity';
 import { queryKeys } from '@/api/keys';
 import { useSettingsStore } from '@/features/settings/store';
 import { setAnalyticsSink } from '@/lib/analytics';
@@ -52,6 +53,7 @@ async function renderHome(routes: Routes, flags: Record<string, boolean> = ALL_O
 }
 
 beforeEach(() => {
+  useConnectivityStore.setState({ offline: false });
   api.mockReset();
   jest.clearAllMocks();
   useDeitySelectionStore.setState({ selectedDeityId: null });

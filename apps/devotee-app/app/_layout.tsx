@@ -8,6 +8,7 @@ import { I18nextProvider } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { hydrateQueryCache, persistQueryCache } from '@/api/persist';
 import { createQueryClient, subscribeAppFocus } from '@/api/query-client';
 import { ConfigGate } from '@/features/shell/ConfigGate';
 import { ToastHost } from '@/features/shell/Toast';
@@ -19,11 +20,17 @@ import { fontAssets } from '@/theme/fonts';
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [queryClient] = useState(createQueryClient);
+  // The last server answers come back from disk first (offline cold start, T14).
+  const [queryClient] = useState(() => {
+    const client = createQueryClient();
+    hydrateQueryCache(client);
+    return client;
+  });
   // A font that fails to load falls back to the system font rather than blocking the app.
   const [fontsLoaded, fontError] = useFonts(fontAssets);
 
   useEffect(() => subscribeAppFocus(), []);
+  useEffect(() => persistQueryCache(queryClient), [queryClient]);
 
   if (!fontsLoaded && !fontError) return null;
 

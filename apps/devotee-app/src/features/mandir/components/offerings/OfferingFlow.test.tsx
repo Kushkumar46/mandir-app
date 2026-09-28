@@ -2,6 +2,7 @@ import { MandirFlag } from '@mandir/shared-types';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import { ApiError, apiRequest } from '@/api/client';
+import { useConnectivityStore } from '@/api/connectivity';
 import { queryKeys } from '@/api/keys';
 import { useToastStore } from '@/features/shell/Toast';
 import { setAnalyticsSink } from '@/lib/analytics';
@@ -65,6 +66,7 @@ let events: { event: string; props: Record<string, unknown> }[] = [];
 let restoreAnalytics: () => void;
 
 beforeEach(() => {
+  useConnectivityStore.setState({ offline: false });
   api.mockReset();
   resetOfferingStore();
   useDeitySelectionStore.setState({ selectedDeityId: null });

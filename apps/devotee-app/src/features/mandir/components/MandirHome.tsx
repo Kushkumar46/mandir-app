@@ -20,6 +20,7 @@ import { useBellRinger } from '../hooks/useBells';
 import { dismissGreetingGlow, useFirstVisitOfDay } from '../hooks/useFirstVisitOfDay';
 import { useMandirHome, usePrefetchDeityImages } from '../hooks/useMandirHome';
 import { useListen } from '../hooks/useListen';
+import { useOfflineQueueFlush, usePrefetchDefaultAarti } from '../hooks/useOfflineSupport';
 import { feetSprites, useDeityOfferings, useOfferingFlow } from '../hooks/useOfferings';
 import { coverRect, DEITY_IMAGE_ASPECT, mandirLayout, pickImageVariant, type Size } from '../layout';
 import { coinsShort, displayTodayOfferings } from '../offerings';
@@ -44,7 +45,7 @@ export function MandirHome() {
   const { t } = useTranslation();
   const language = useLanguageStore((s) => s.language);
   const offeringsEnabled = useFlag(MandirFlag.OFFERINGS);
-  const { enabled, home, data, deity, todayOfferings, offline } = useMandirHome();
+  const { enabled, home, data, deity, todayOfferings, offline, offlineNoData } = useMandirHome();
   const select = useDeitySelectionStore((s) => s.select);
   const [area, setArea] = useState<Size | null>(null);
   const [sceneTop, setSceneTop] = useState(0);
@@ -77,7 +78,9 @@ export function MandirHome() {
     todayOfferings &&
     displayTodayOfferings(todayOfferings, active && active.deityId === deity?.id ? { kind: active.item.kind, before: active.before } : null);
   const sprites = offerings.data || (deity && lastOffered[deity.id]) ? feetSprites(offerings.data, deity ? lastOffered[deity.id] : undefined) : null;
-  const listen = useListen(deity);
+  const listen = useListen(deity, offline);
+  usePrefetchDefaultAarti(deity, offline);
+  useOfflineQueueFlush(offline || offlineNoData);
 
   useEffect(() => {
     setTabBarHidden(aartiOpen);
@@ -87,9 +90,10 @@ export function MandirHome() {
   useEffect(() => () => stopAarti(), []);
 
   if (!enabled) return <StatusView state="message" message={t('mandir.disabled')} />;
-  if (!data && home.isError) return <StatusView state="error" error={home.error} onRetry={() => void home.refetch()} />;
+  if (!data && home.isError && !offlineNoData) return <StatusView state="error" error={home.error} onRetry={() => void home.refetch()} />;
 
-  const loading = !data;
+  // Fresh install without internet: the fallback mandir (bundled artwork, bells) with a retry.
+  const loading = !data && !offlineNoData;
   const deityName = deity ? pickLocalized(language, deity.nameHi, deity.nameEn) : undefined;
   const comingSoon = () => showToast(t('mandir.comingSoon'));
   const openSangrah = () => router.push('/sangrah');
@@ -173,7 +177,7 @@ export function MandirHome() {
             </GestureDetector>
             <OfferingEffects layout={layout} deity={deity} />
             {firstVisit && <TodayDarshanGlow layout={layout} onDone={dismissGreetingGlow} />}
-            {offline && <OfflineBanner layout={layout} />}
+            {(offline || offlineNoData) && <OfflineBanner layout={layout} />}
             {!aartiOpen && (
               <>
                 <TithiStrip layout={layout} text={data?.today.tithiText} />
@@ -189,6 +193,16 @@ export function MandirHome() {
                   onListen={listen.toggle}
                 />
               </>
+            )}
+            {offlineNoData && (
+              <View style={styles.offlineCard} testID="mandir-offline-fallback">
+                <AppText variant="body" style={styles.emptyText}>
+                  {t('common.connectInternet')}
+                </AppText>
+                <Pressable accessibilityRole="button" onPress={() => void home.refetch()} style={styles.emptyButton}>
+                  <AppText variant="button">{t('common.retry')}</AppText>
+                </Pressable>
+              </View>
             )}
             {data && !deity && (
               <View style={styles.empty}>
@@ -211,6 +225,7 @@ export function MandirHome() {
           deity={deity}
           thali={data?.thali ?? null}
           balance={data?.coins.balance}
+          offline={offline}
           onRing={ringBell}
           onClose={() => setAartiOpen(false)}
         />
@@ -237,6 +252,17 @@ const styles = StyleSheet.create({
   scene: { flex: 1, overflow: 'hidden' },
   empty: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   emptyText: { color: colors.cream, textAlign: 'center' },
+  offlineCard: {
+    position: 'absolute',
+    left: spacing.xl,
+    right: spacing.xl,
+    bottom: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(43, 26, 16, 0.85)',
+  },
   emptyButton: {
     minHeight: MIN_TAP_TARGET,
     paddingHorizontal: spacing.lg,

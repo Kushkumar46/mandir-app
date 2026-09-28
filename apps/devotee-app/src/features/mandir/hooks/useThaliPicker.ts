@@ -21,7 +21,7 @@ import { useOfferingStore } from '../store/offerings';
  * server balance is too low. Unlock = `POST /mandir/thalis/:id/unlock` with one Idempotency-Key per
  * sheet (a retry after a lost answer never pays twice); the new design is then selected.
  */
-export function useThaliPicker({ open, balance }: { open: boolean; balance: number | undefined }) {
+export function useThaliPicker({ open, balance, offline }: { open: boolean; balance: number | undefined; offline: boolean }) {
   const { t } = useTranslation();
   const language = useLanguageStore((s) => s.language);
   const enabled = useFlag(MandirFlag.THALI_DESIGNS);
@@ -55,6 +55,8 @@ export function useThaliPicker({ open, balance }: { open: boolean; balance: numb
 
   const onPick = (thali: ThaliView) => {
     if (thali.selected) return;
+    // Selecting and unlocking need the server (T14 offline state).
+    if (offline) return showToast(t('common.connectInternet'));
     if (thali.unlocked) return choose(thali);
     const decision = decideOffering(thali, balance);
     if (decision.kind === 'insufficient') {

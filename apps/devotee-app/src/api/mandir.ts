@@ -1,6 +1,7 @@
 import {
   type AartiCompleteRequest,
   aartiCompleteResponseSchema,
+  type AartiLyrics,
   aartiLyricsSchema,
   type AartiView,
   type DarshanOutcome,
@@ -24,9 +25,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
-import { newIdempotencyKey } from '@/lib/uuid';
-
 import { apiRequest, fetchPublicJson } from './client';
+import { NOT_A_SERVER_ANSWER } from './connectivity';
 import { queryKeys } from './keys';
 
 /** `GET /v1/mandir/home` — everything VM-01 needs in one call. */
@@ -104,22 +104,18 @@ export function useDeityOfferingsQuery(deityId: string | undefined, enabled = tr
 }
 
 /**
- * `POST /v1/mandir/offerings` with a fresh `Idempotency-Key` per tap (coins are spent server-side;
- * mutations never retry). On success the cached home takes the server's balance, streak and today's
- * offerings for the deity — the app never computes the balance itself.
+ * `POST /v1/mandir/offerings`. The caller passes the `Idempotency-Key`: a fresh one per tap, reused
+ * when a queued offline offering is sent later (coins are spent server-side; mutations never retry).
+ * On success the cached home takes the server's balance, streak and today's offerings for the
+ * deity — the app never computes the balance itself.
  */
 export function useMakeOfferingMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['mandir', 'offering'],
-    mutationFn: (body: MakeOfferingRequest) =>
-      apiRequest('/mandir/offerings', {
-        method: 'POST',
-        body,
-        schema: makeOfferingResponseSchema,
-        idempotencyKey: newIdempotencyKey(),
-      }),
-    onSuccess: (res, body) => {
+    mutationFn: ({ body, idempotencyKey }: { body: MakeOfferingRequest; idempotencyKey: string }) =>
+      apiRequest('/mandir/offerings', { method: 'POST', body, schema: makeOfferingResponseSchema, idempotencyKey }),
+    onSuccess: (res, { body }) => {
       queryClient.setQueryData<MandirHome>(queryKeys.mandirHome, (home) => home && applyOfferingToHome(home, body.deityId, res));
     },
   });
@@ -148,13 +144,29 @@ export function useDeityAartisQuery(deityId: string | undefined, enabled = true)
   });
 }
 
-/** The lyrics timeline file of an aarti version (never changes: a new text is a new version). */
-export function useAartiLyricsQuery(aarti: Pick<AartiView, 'id' | 'version' | 'lyricsUrl'> | undefined) {
+export type LyricsCache = {
+  read: (aarti: Pick<AartiView, 'id' | 'version'>) => AartiLyrics | null;
+  write: (aarti: Pick<AartiView, 'id' | 'version'>, lyrics: AartiLyrics) => void;
+};
+
+/**
+ * The lyrics timeline file of an aarti version (never changes: a new text is a new version). With a
+ * `cache`, the device copy is used first and a downloaded file is saved (§4.5, T14).
+ */
+export function useAartiLyricsQuery(aarti: Pick<AartiView, 'id' | 'version' | 'lyricsUrl'> | undefined, cache?: LyricsCache) {
   return useQuery({
     queryKey: queryKeys.aartiLyrics(aarti?.id ?? '', aarti?.version ?? 0),
-    queryFn: ({ signal }) => fetchPublicJson(aarti!.lyricsUrl, { schema: aartiLyricsSchema, signal }),
+    queryFn: async ({ signal }) => {
+      const cached = cache?.read(aarti!);
+      if (cached) return cached;
+      const lyrics = await fetchPublicJson(aarti!.lyricsUrl, { schema: aartiLyricsSchema, signal });
+      cache?.write(aarti!, lyrics);
+      return lyrics;
+    },
     enabled: !!aarti,
     staleTime: Infinity,
+    // Often answered from the device cache: says nothing about the connection.
+    meta: NOT_A_SERVER_ANSWER,
   });
 }
 

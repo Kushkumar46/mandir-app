@@ -14,5 +14,7 @@ export function useAppConfigQuery() {
     queryFn: ({ signal }) => apiRequest('/config', { schema: appConfigSchema, signal }),
     staleTime: CONFIG_STALE_MS,
     gcTime: Infinity,
+    // Without any config (first launch offline → fallback config) keep trying every 30 s.
+    refetchInterval: (query) => (query.state.data ? false : 30_000),
   });
 }

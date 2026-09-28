@@ -13,6 +13,8 @@ import type {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
+import { connectivityCaches } from '@/api/connectivity';
+
 /** Test helpers for Mandir screens: config/home payloads and a QueryClient without retries. */
 
 export const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -81,8 +83,9 @@ export function homePayload(overrides: Partial<MandirHome> = {}): MandirHome {
   };
 }
 
+/** Like the app's client (incl. the connectivity tracking), without retries or timers. */
 export function createTestQueryClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
+  return new QueryClient({ ...connectivityCaches(), defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
 }
 
 export function withQueryClient(client: QueryClient) {

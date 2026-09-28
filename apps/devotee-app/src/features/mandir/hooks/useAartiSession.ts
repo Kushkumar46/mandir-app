@@ -14,12 +14,15 @@ import { pickLocalized, useLanguageStore } from '@/lib/language';
 import { newIdempotencyKey } from '@/lib/uuid';
 
 import { isAartiComplete, playedRatioOf } from '../aarti';
+import { cacheAartiAudio, cachedAudioUri, readCachedLyrics, writeCachedLyrics } from '../aarti-cache';
 import { type AartiTrack, playAarti, useAartiPlayerStore } from '../aarti-player';
 import { AUTO_CIRCLE_MS, AUTO_CIRCLE_MS_REDUCED_MOTION, autoCircles } from '../animations/thali';
+import { queueAartiComplete } from '../offline-queue';
 import { useRewardToast } from './useRewardToast';
 
+const LYRICS_CACHE = { read: readCachedLyrics, write: writeCachedLyrics };
+
 function completionError(e: unknown, t: (key: string) => string): string {
-  if (e instanceof ApiError && e.isNetworkError) return t('common.connectInternet');
   if (e instanceof ApiError && e.code === ErrorCode.AARTI_NOT_AVAILABLE) return t('mandir.aartiMode.unavailable');
   return t('mandir.aartiMode.saveFailed');
 }
@@ -27,6 +30,8 @@ function completionError(e: unknown, t: (key: string) => string): string {
 export type CompletionState =
   | { status: 'none' }
   | { status: 'sending' }
+  /** Offline: saved on the device, sent when the app is back online (T14). */
+  | { status: 'queued' }
   | { status: 'done'; res: AartiCompleteResponse }
   | { status: 'failed'; message: string };
 
@@ -49,7 +54,7 @@ export function aartiTrack(aarti: AartiView, deity: HomeDeity, language: Support
  * locked), and once ≥ 90% is played and ≥ 3 circles are made posts `aarti-complete` once, with one
  * Idempotency-Key per aarti (a retry reuses it).
  */
-export function useAartiSession(deity: HomeDeity) {
+export function useAartiSession(deity: HomeDeity, offline: boolean) {
   const { t } = useTranslation();
   const language = useLanguageStore((s) => s.language);
   const silentMode = useSettingsStore((s) => s.aartiInSilentMode);
@@ -58,7 +63,10 @@ export function useAartiSession(deity: HomeDeity) {
   const aartis = useDeityAartisQuery(deity.id);
   const [aartiId, setAartiId] = useState<string | null>(null);
   const aarti = aartis.data?.items.find((a) => a.id === aartiId) ?? aartis.data?.items[0];
-  const lyrics = useAartiLyricsQuery(aarti);
+  const lyrics = useAartiLyricsQuery(aarti, LYRICS_CACHE);
+  const cachedUri = aarti ? cachedAudioUri(aarti) : null;
+  /** Offline and this aarti was never downloaded: nothing to play. */
+  const notDownloaded = !!aarti && offline && !cachedUri;
   const player = useAartiPlayerStore();
   const complete = useAartiCompleteMutation();
   const rewardToast = useRewardToast();
@@ -78,15 +86,18 @@ export function useAartiSession(deity: HomeDeity) {
   const onThisAarti = !!aarti && player.track?.aartiId === aarti.id && player.mode === 'aarti';
   const playedRatio = onThisAarti ? playedRatioOf(player.played, player.duration) : 0;
 
-  // Start (or restart) the audio for the chosen aarti.
-  const audioUri = aarti?.audioUrl;
+  // Start (or restart) the audio for the chosen aarti: the device copy when there is one (T14),
+  // else the CDN stream while the file downloads into the cache for next time (§4.5).
+  const audioUrl = aarti?.audioUrl;
   useEffect(() => {
-    if (!aarti || !audioUri) return;
-    playAarti(aartiTrack(aarti, deity, language, audioUri), 'aarti', { playsInSilentMode: silentMode });
+    if (!aarti || !audioUrl || notDownloaded) return;
+    const local = cachedAudioUri(aarti);
+    playAarti(aartiTrack(aarti, deity, language, local ?? audioUrl), 'aarti', { playsInSilentMode: silentMode });
+    if (!local) void cacheAartiAudio(aarti);
     track('aarti_started', { aartiId: aarti.id });
     // Only a different aarti (or its file) restarts the audio; language/settings changes don't.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aarti?.id, audioUri]);
+  }, [aarti?.id, audioUrl, notDownloaded]);
 
   // Auto circles grow with time: tick 4×/s while Auto is on (status updates may stop when paused).
   useEffect(() => {
@@ -119,14 +130,14 @@ export function useAartiSession(deity: HomeDeity) {
 
   const submit = () => {
     if (!aarti) return;
+    const body = { deityId: deity.id, aartiId: aarti.id, playedRatio: Math.round(playedRatio * 1000) / 1000, circles };
     complete.mutate(
-      {
-        body: { deityId: deity.id, aartiId: aarti.id, playedRatio: Math.round(playedRatio * 1000) / 1000, circles },
-        idempotencyKey,
-      },
+      { body, idempotencyKey },
       {
         onSuccess: rewardToast,
         onError: (e) => {
+          // Offline (T14): sent later with the same key; the card says so.
+          if (e instanceof ApiError && e.isNetworkError) queueAartiComplete(body, idempotencyKey);
           if (e instanceof ApiError && e.code === ErrorCode.AARTI_NOT_AVAILABLE) {
             void queryClient.invalidateQueries({ queryKey: queryKeys.deityAartis(deity.id) });
           }
@@ -152,7 +163,9 @@ export function useAartiSession(deity: HomeDeity) {
       ? { status: 'sending' }
       : complete.data
         ? { status: 'done', res: complete.data }
-        : { status: 'failed', message: completionError(complete.error, t) };
+        : complete.error instanceof ApiError && complete.error.isNetworkError
+          ? { status: 'queued' }
+          : { status: 'failed', message: completionError(complete.error, t) };
 
   return {
     aartis,
@@ -170,5 +183,6 @@ export function useAartiSession(deity: HomeDeity) {
     completion,
     retry: submit,
     session,
+    notDownloaded,
   };
 }

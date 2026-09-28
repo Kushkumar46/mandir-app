@@ -56,7 +56,7 @@ Table `feature_flags` (key, enabled, rollout_percent, platforms, min_app_version
 
 - `GET /v1/config` returns all flags evaluated for the current user + app version + platform, plus remote config values (e.g. `supportWhatsapp`, `minSupportedAppVersion`).
 - Remote config values are stored in the `payload` of the reserved flag row `app.remote_config` (merged over code defaults; see ADR 0001). The app sends `X-App-Version` and `X-Platform` headers so flags can be evaluated. Auth is optional on this route; anonymous callers get flags with `rollout_percent = 100` only.
-- App fetches config at launch, caches it, refetches on foreground every 30 min.
+- App fetches config at launch, caches it, refetches on foreground every 30 min. The last config is also saved on the device with the other offline data (Virtual Mandir T14, `apps/devotee-app/src/api/persist.ts`), so flags work on a cold start without internet. First launch with no internet and nothing saved → a bundled offline fallback config (only `mandir.enabled` on, everything else off) until the real config arrives (retried every 30 s and on foreground).
 - Backend enforces flags with `@RequireFlag('mandir.community_upload')` on routes.
 - Rollout: `hash(userId + key) % 100 < rollout_percent`.
 - `minSupportedAppVersion` → app shows a force-update screen if below.

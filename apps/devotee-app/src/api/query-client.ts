@@ -2,6 +2,7 @@ import { focusManager, QueryClient } from '@tanstack/react-query';
 import { AppState, Platform } from 'react-native';
 
 import { ApiError } from './client';
+import { connectivityCaches } from './connectivity';
 
 /** 4xx answers are final (except 408/429); network errors and 5xx get two retries. */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
@@ -13,8 +14,10 @@ export function shouldRetry(failureCount: number, error: unknown): boolean {
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({
+    ...connectivityCaches(),
     defaultOptions: {
-      queries: { retry: shouldRetry, staleTime: 60_000 },
+      // Unused data stays a day so the offline cache (persist.ts) keeps it between screens.
+      queries: { retry: shouldRetry, staleTime: 60_000, gcTime: 24 * 60 * 60_000 },
       // Writes are never retried blindly; spends carry an Idempotency-Key and are retried by the feature.
       mutations: { retry: false },
     },

@@ -4,27 +4,70 @@ require('react-native-gesture-handler/jestSetup');
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
-// expo-file-system: an in-memory documents directory (src/lib/storage.ts).
+// expo-file-system: an in-memory documents directory (src/lib/storage.ts, features/mandir/aarti-cache.ts).
+// `__files` maps uri → content, `__dirs` holds created directories; `File.downloadFileAsync` is a
+// jest.fn that "downloads" `downloaded:<url>` (override it to fail).
 jest.mock('expo-file-system', () => {
   const files = new Map();
+  const dirs = new Set();
+  const times = new Map();
+  let clock = 0;
+  const put = (uri, content) => {
+    files.set(uri, String(content));
+    times.set(uri, ++clock);
+  };
   class File {
     constructor(dir, name) {
       this.uri = `${dir.uri}/${name}`;
+      this.name = name;
     }
     get exists() {
       return files.has(this.uri);
     }
     create() {
-      files.set(this.uri, '');
+      put(this.uri, '');
     }
     textSync() {
       return files.get(this.uri) ?? '';
     }
     write(content) {
-      files.set(this.uri, String(content));
+      put(this.uri, content);
+    }
+    delete() {
+      if (!files.has(this.uri)) throw new Error(`no file ${this.uri}`);
+      files.delete(this.uri);
+    }
+    info() {
+      const content = files.get(this.uri);
+      return { exists: content !== undefined, size: content?.length ?? 0, modificationTime: times.get(this.uri) ?? 0 };
+    }
+    async move(target) {
+      put(target.uri, files.get(this.uri) ?? '');
+      files.delete(this.uri);
     }
   }
-  return { File, Paths: { document: { uri: 'file:///documents' } }, __files: files };
+  File.downloadFileAsync = jest.fn(async (url, target) => {
+    put(target.uri, `downloaded:${url}`);
+    return target;
+  });
+  class Directory {
+    constructor(parent, name) {
+      this.uri = `${parent.uri}/${name}`;
+    }
+    get exists() {
+      return dirs.has(this.uri);
+    }
+    create() {
+      dirs.add(this.uri);
+    }
+    list() {
+      const prefix = `${this.uri}/`;
+      return [...files.keys()]
+        .filter((uri) => uri.startsWith(prefix) && !uri.slice(prefix.length).includes('/'))
+        .map((uri) => new File(this, uri.slice(prefix.length)));
+    }
+  }
+  return { File, Directory, Paths: { document: { uri: 'file:///documents' } }, __files: files, __dirs: dirs };
 });
 
 // expo-audio: players that record calls (src/lib/sound.ts, features/mandir/sounds.ts,

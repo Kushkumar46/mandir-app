@@ -1,10 +1,12 @@
 import { MandirFlag } from '@mandir/shared-types';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { createAudioPlayer } from 'expo-audio';
+import { File } from 'expo-file-system';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
 import { ApiError, apiRequest, fetchPublicJson } from '@/api/client';
+import { useConnectivityStore } from '@/api/connectivity';
 import { queryKeys } from '@/api/keys';
 import { useTabBarStore } from '@/features/shell/tabBar';
 import { useToastStore } from '@/features/shell/Toast';
@@ -102,10 +104,14 @@ let events: { event: string; props: Record<string, unknown> }[] = [];
 let restoreAnalytics: () => void;
 
 beforeEach(() => {
+  useConnectivityStore.setState({ offline: false });
   // Auto circles grow with time: every test runs on fake timers (findBy/waitFor advance them).
   jest.useFakeTimers({ now: new Date('2026-09-29T04:00:00Z') });
   api.mockReset();
   lyricsFetch.mockReset();
+  // Audio downloads (T14 cache) never finish here: playback streams from the CDN URL.
+  jest.requireMock('expo-file-system').__files.clear();
+  (File.downloadFileAsync as jest.Mock).mockImplementation(() => new Promise(() => undefined));
   stopAarti();
   create.mockClear();
   resetOfferingStore();
@@ -238,7 +244,7 @@ describe('VM-06 aarti mode', () => {
     await renderHome({
       routes: {
         '/mandir/rituals/aarti-complete': () =>
-          fail ? Promise.reject(new ApiError(0, 'NETWORK_ERROR', 'offline')) : Promise.resolve(aartiCompleteResponse()),
+          fail ? Promise.reject(new ApiError(503, 'INTERNAL', 'busy')) : Promise.resolve(aartiCompleteResponse()),
       },
     });
     const player = await openAarti();
@@ -247,7 +253,7 @@ describe('VM-06 aarti mode', () => {
     await act(async () => jest.advanceTimersByTime(9100));
 
     const card = await screen.findByTestId('aarti-complete');
-    expect(await within(card).findByText('इंटरनेट से जुड़ें')).toBeTruthy();
+    expect(await within(card).findByText('आरती दर्ज नहीं हो सकी')).toBeTruthy();
     fail = false;
     await fireEvent.press(within(card).getByText('फिर से कोशिश करें'));
     expect(await screen.findByText('🔥 6 दिन की साधना')).toBeTruthy();

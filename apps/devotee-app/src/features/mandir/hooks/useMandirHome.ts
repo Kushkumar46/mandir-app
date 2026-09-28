@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { useEffect } from 'react';
 
 import { ApiError } from '@/api/client';
+import { useConnectivityStore } from '@/api/connectivity';
 import { useMandirHomeQuery } from '@/api/mandir';
 import { useFlag } from '@/features/config/flags';
 
@@ -17,6 +18,8 @@ export function useMandirHome() {
   const data = home.data;
   const deity = data ? resolveSelectedDeity(data.deities, selectedId, data.defaultDeityId) : null;
 
+  const networkError = home.error instanceof ApiError && home.error.isNetworkError;
+  const lastRequestOffline = useConnectivityStore((s) => s.offline);
   return {
     enabled,
     home,
@@ -24,10 +27,12 @@ export function useMandirHome() {
     deity,
     todayOfferings: data && deity ? data.todayOfferings[deity.id] : undefined,
     /**
-     * Showing the last loaded scene while the latest refresh could not reach the server.
-     * (Disk cache for a cold start without internet comes with T14.)
+     * The last request could not reach the server: showing the last loaded scene (also restored
+     * from disk on a cold start, T14).
      */
-    offline: !!data && home.error instanceof ApiError && home.error.isNetworkError,
+    offline: !!data && lastRequestOffline,
+    /** No scene was ever loaded and there is no internet (fresh install offline): the fallback mandir. */
+    offlineNoData: !data && networkError,
   };
 }
 

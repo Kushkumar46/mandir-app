@@ -32,6 +32,8 @@ type Props = {
   deity: HomeDeity;
   thali: HomeThali | null;
   balance: number | undefined;
+  /** The last server refresh failed for lack of internet (T14). */
+  offline: boolean;
   onRing: (side: BellSide) => void;
   onClose: () => void;
 };
@@ -42,12 +44,12 @@ type Props = {
  * bells + shankh, the thali picker (`mandir.thali_designs`), close with confirmation, and the
  * "आरती सम्पन्न 🙏" overlay once the completion rule holds.
  */
-export function AartiMode({ sceneTop, area, layout, deity, thali, balance, onRing, onClose }: Props) {
+export function AartiMode({ sceneTop, area, layout, deity, thali, balance, offline, onRing, onClose }: Props) {
   const { t } = useTranslation();
   const language = useLanguageStore((s) => s.language);
   const shareEnabled = useFlag(MandirFlag.SHARE_CARD);
-  const s = useAartiSession(deity);
-  const picker = useThaliPicker({ open: true, balance });
+  const s = useAartiSession(deity, offline);
+  const picker = useThaliPicker({ open: true, balance, offline });
   const [confirmClose, setConfirmClose] = useState(false);
   const geometry = aartiLayout(area, layout.arch, deity.image?.anchor ?? null, picker.enabled);
   const finished = s.completion.status !== 'none';
@@ -150,6 +152,11 @@ export function AartiMode({ sceneTop, area, layout, deity, thali, balance, onRin
             </View>
           ) : !s.aarti ? (
             <AppText style={[styles.status, styles.statusText]}>{t('mandir.aartiMode.none')}</AppText>
+          ) : s.notDownloaded ? (
+            <View style={styles.status} testID="aarti-not-downloaded">
+              <MaterialCommunityIcons name="wifi-off" size={24} color={colors.cream} />
+              <AppText style={styles.statusText}>{t('mandir.aartiMode.notDownloaded')}</AppText>
+            </View>
           ) : (
             <>
               <Lyrics lyrics={s.lyrics} time={time} />
@@ -306,6 +313,12 @@ function CompletionCard({
           <View style={styles.doneRow}>
             <ActivityIndicator color={colors.maroon} />
             <AppText style={styles.doneText}>{t('mandir.aartiMode.saving')}</AppText>
+          </View>
+        )}
+        {completion.status === 'queued' && (
+          <View style={styles.doneRow}>
+            <MaterialCommunityIcons name="wifi-off" size={18} color={colors.maroon} />
+            <AppText style={styles.doneText}>{t('mandir.aartiMode.queued')}</AppText>
           </View>
         )}
         {completion.status === 'done' && (
