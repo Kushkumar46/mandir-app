@@ -58,7 +58,9 @@
     "appInfo": "ऐप जानकारी",
     "version": "संस्करण",
     "environment": "वातावरण",
-    "server": "सर्वर"
+    "server": "सर्वर",
+    "sound": "ध्वनि",
+    "startupShankh": "दिन के पहले दर्शन पर शंख ध्वनि"
   },
   "sangrah": {
     "title": "संग्रह",

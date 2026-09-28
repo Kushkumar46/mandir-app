@@ -5,8 +5,14 @@ import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-han
 
 import { ApiError, apiRequest } from '@/api/client';
 import { queryKeys } from '@/api/keys';
+import { useSettingsStore } from '@/features/settings/store';
+import { setAnalyticsSink } from '@/lib/analytics';
+import { impactMedium } from '@/lib/haptics';
+import { getPreference, resetPreferencesCache, setPreference } from '@/lib/storage';
 import { configWith, createTestQueryClient, homePayload, withQueryClient } from '@/test/mandir-fixtures';
 
+import { useGreetingStore } from '../hooks/useFirstVisitOfDay';
+import { playBell, playShankh } from '../sounds';
 import { useDeitySelectionStore } from '../store/selection';
 import { MandirHome } from './MandirHome';
 
@@ -18,6 +24,9 @@ jest.mock('expo-router', () => {
     useFocusEffect: (cb: () => void | (() => void)) => useEffect(cb, [cb]),
   };
 });
+
+jest.mock('../sounds', () => ({ preloadMandirSounds: jest.fn(), playBell: jest.fn(), playShankh: jest.fn() }));
+jest.mock('@/lib/haptics', () => ({ impactMedium: jest.fn(), selectionTick: jest.fn() }));
 
 const api = apiRequest as jest.MockedFunction<typeof apiRequest>;
 const ALL_ON = Object.fromEntries(Object.values(MandirFlag).map((k) => [k, true]));
@@ -44,7 +53,12 @@ async function renderHome(routes: Routes, flags: Record<string, boolean> = ALL_O
 
 beforeEach(() => {
   api.mockReset();
+  jest.clearAllMocks();
   useDeitySelectionStore.setState({ selectedDeityId: null });
+  useSettingsStore.setState({ startupShankh: true });
+  useGreetingStore.setState({ glowDate: null });
+  jest.requireMock('expo-file-system').__files.clear();
+  resetPreferencesCache();
 });
 
 describe('VM-01 Mandir Home', () => {
@@ -178,6 +192,82 @@ describe('VM-01 Mandir Home', () => {
       await fireEvent.press(screen.getByLabelText('संग्रह'));
       expect(router.push).toHaveBeenCalledTimes(2);
       expect(router.push).toHaveBeenCalledWith('/sangrah');
+    });
+  });
+
+  describe('T11 bells', () => {
+    it('rings with sound and haptic on each tap and logs bell_rung at most once a minute', async () => {
+      const events: string[] = [];
+      const restore = setAnalyticsSink((e) => events.push(e));
+      await renderHome({ '/mandir/home': () => Promise.resolve(homePayload()) });
+      await screen.findByLabelText('हनुमान जी के दर्शन');
+
+      const [left, right] = screen.getAllByLabelText('घंटी बजाएं');
+      await fireEvent.press(left);
+      await fireEvent.press(right);
+      await fireEvent.press(left);
+      expect(playBell).toHaveBeenNthCalledWith(1, 'left');
+      expect(playBell).toHaveBeenNthCalledWith(2, 'right');
+      expect(playBell).toHaveBeenCalledTimes(3);
+      expect(impactMedium).toHaveBeenCalledTimes(3);
+      expect(events.filter((e) => e === 'bell_rung')).toHaveLength(1);
+      restore();
+    });
+
+    it('keeps the bells disabled while loading', async () => {
+      await renderHome({ '/mandir/home': () => new Promise(() => {}) });
+      for (const bell of screen.getAllByLabelText('घंटी बजाएं')) await fireEvent.press(bell);
+      expect(playBell).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('VM-01 first visit of the day', () => {
+    const open = async (flags: Record<string, boolean> = ALL_ON) => {
+      await renderHome({ '/mandir/home': () => Promise.resolve(homePayload()) }, flags);
+      await screen.findByLabelText('हनुमान जी के दर्शन');
+    };
+
+    it('plays the shankh and shows the "आज का दर्शन" glow once per local day', async () => {
+      await open();
+      expect(playShankh).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('today-darshan-glow')).toBeTruthy();
+      expect(screen.getByText('✨ आज का दर्शन ✨')).toBeTruthy();
+      expect(getPreference('mandir.lastVisitDate', null)).toBe('2026-09-29');
+      // the glow plays once, then goes away
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 4100));
+      });
+      expect(screen.queryByTestId('today-darshan-glow')).toBeNull();
+
+      await screen.unmount();
+      await open(); // same day again
+      expect(playShankh).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('today-darshan-glow')).toBeNull();
+    });
+
+    it('greets again on a new day', async () => {
+      setPreference('mandir.lastVisitDate', '2026-09-28');
+      await open();
+      expect(playShankh).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('today-darshan-glow')).toBeTruthy();
+    });
+
+    it('shows only the glow when mandir.startup_shankh_sound is off or the user turned the shankh off', async () => {
+      await open({ ...ALL_ON, [MandirFlag.STARTUP_SHANKH_SOUND]: false });
+      expect(screen.getByTestId('today-darshan-glow')).toBeTruthy();
+      await screen.unmount();
+
+      setPreference('mandir.lastVisitDate', null);
+      useSettingsStore.setState({ startupShankh: false });
+      await open();
+      expect(screen.getByTestId('today-darshan-glow')).toBeTruthy();
+      expect(playShankh).not.toHaveBeenCalled();
+    });
+
+    it('waits for the scene before greeting', async () => {
+      await renderHome({ '/mandir/home': () => new Promise(() => {}) });
+      expect(playShankh).not.toHaveBeenCalled();
+      expect(getPreference('mandir.lastVisitDate', null)).toBeNull();
     });
   });
 });

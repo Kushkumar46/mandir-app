@@ -18,7 +18,6 @@ import { fontAssets } from '@/theme/fonts';
 // ConfigGate hides the splash once the remote config has settled.
 void SplashScreen.preventAutoHideAsync();
 
-// Audio (expo-audio) setup joins these providers with bells/aarti (T11/T13).
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
   // A font that fails to load falls back to the system font rather than blocking the app.

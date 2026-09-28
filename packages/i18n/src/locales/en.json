@@ -58,7 +58,9 @@
     "appInfo": "App info",
     "version": "Version",
     "environment": "Environment",
-    "server": "Server"
+    "server": "Server",
+    "sound": "Sound",
+    "startupShankh": "Shankh sound on the first darshan of the day"
   },
   "sangrah": {
     "title": "Sangrah",

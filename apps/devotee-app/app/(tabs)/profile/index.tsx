@@ -1,19 +1,21 @@
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@mandir/i18n';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useSettingsStore } from '@/features/settings/store';
 import { env } from '@/lib/env';
 import { useLanguageStore } from '@/lib/language';
 import { AppText, colors, MIN_TAP_TARGET, radius, spacing } from '@/theme';
 
 const LANGUAGE_LABEL = { hi: 'profile.languageHi', en: 'profile.languageEn' } as const;
 
-/** Profile tab shell: language switch + app info. Account, streak and uploads come with later tasks. */
+/** Profile tab shell: language switch, sound setting + app info. Account, streak and uploads come with later tasks. */
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { language, setLanguage } = useLanguageStore();
+  const { startupShankh, setStartupShankh } = useSettingsStore();
 
   return (
     <ScrollView
@@ -41,6 +43,19 @@ export default function ProfileScreen() {
               </Pressable>
             );
           })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <AppText variant="title">{t('profile.sound')}</AppText>
+        <View style={styles.switchRow}>
+          <AppText style={styles.switchLabel}>{t('profile.startupShankh')}</AppText>
+          <Switch
+            accessibilityLabel={t('profile.startupShankh')}
+            value={startupShankh}
+            onValueChange={setStartupShankh}
+            trackColor={{ true: colors.saffron }}
+          />
         </View>
       </View>
 
@@ -86,4 +101,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   optionSelected: { backgroundColor: colors.maroon },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: MIN_TAP_TARGET },
+  switchLabel: { flex: 1 },
 });

@@ -45,6 +45,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-dev-client',
+    // Playback only: no microphone permission. Background playback is for aarti audio (T13).
+    ['expo-audio', { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: true }],
     [
       'expo-splash-screen',
       {

@@ -39,30 +39,6 @@ export function OfflineBanner({ layout }: { layout: MandirLayout }) {
   );
 }
 
-/** Two hanging bells left/right of the garbhagriha (ring + swing come with T11, §4.2). */
-export function Bells({ layout, disabled, onRing }: { layout: MandirLayout; disabled: boolean; onRing?: (side: 'left' | 'right') => void }) {
-  const { t } = useTranslation();
-  const { size, top, leftX, rightX } = layout.bells;
-  return (
-    <>
-      {(['left', 'right'] as const).map((side) => (
-        <View key={side} style={[styles.bellWrap, { left: side === 'left' ? leftX : rightX, top: 0, width: size, height: top + size }]}>
-          <View style={[styles.chain, { height: top }]} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('mandir.bell')}
-            disabled={disabled}
-            onPress={() => onRing?.(side)}
-            style={[styles.bell, { width: size, height: size }]}
-          >
-            <MaterialCommunityIcons name="bell" size={size * 0.8} color={colors.gold} style={textShadow} />
-          </Pressable>
-        </View>
-      ))}
-    </>
-  );
-}
-
 export type RailAction = OfferingKind | 'SANGRAH';
 
 const RAIL: { action: RailAction; icon: IconName; label: string; offering: boolean }[] = [
@@ -231,9 +207,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   offlineText: { color: colors.white },
-  bellWrap: { position: 'absolute', alignItems: 'center' },
-  chain: { width: 2, backgroundColor: colors.gold, opacity: 0.8 },
-  bell: { alignItems: 'center', justifyContent: 'center', minWidth: MIN_TAP_TARGET, minHeight: MIN_TAP_TARGET },
   rail: { position: 'absolute' },
   railItem: { alignItems: 'center', justifyContent: 'center', gap: 2 },
   railIcon: {

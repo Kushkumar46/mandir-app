@@ -12,12 +12,16 @@ import { showToast } from '@/features/shell/Toast';
 import { pickLocalized, useLanguageStore } from '@/lib/language';
 import { AppText, colors, MIN_TAP_TARGET, radius, spacing } from '@/theme';
 
+import { useBellRinger } from '../hooks/useBells';
+import { dismissGreetingGlow, useFirstVisitOfDay } from '../hooks/useFirstVisitOfDay';
 import { useMandirHome, usePrefetchDeityImages } from '../hooks/useMandirHome';
 import { coverRect, DEITY_IMAGE_ASPECT, mandirLayout, pickImageVariant, type Size } from '../layout';
 import { adjacentIndex, swipeDirection } from '../sangrah';
 import { useDeitySelectionStore } from '../store/selection';
+import { Bells } from './Bells';
 import { DeityScene } from './DeityScene';
-import { AartiThaliButton, Bells, OfferingRail, OfflineBanner, type RailAction, SpecialActions, TithiStrip } from './SceneControls';
+import { AartiThaliButton, OfferingRail, OfflineBanner, type RailAction, SpecialActions, TithiStrip } from './SceneControls';
+import { TodayDarshanGlow } from './TodayDarshanGlow';
 import { TopBar } from './TopBar';
 
 /**
@@ -47,6 +51,9 @@ export function MandirHome() {
     layout ? PixelRatio.getPixelSizeForLayoutSize(coverRect(layout.arch, DEITY_IMAGE_ASPECT).width) : 0,
   );
   usePrefetchDeityImages((layout && data?.deities.map((d) => d.image?.urls)) || [], variant);
+  const ringBell = useBellRinger();
+  // VM-01 first visit of the day: shankh + glow once the scene is on screen.
+  const firstVisit = useFirstVisitOfDay(data?.today.localDate, focused && !!layout && !!deity);
 
   if (!enabled) return <StatusView state="message" message={t('mandir.disabled')} />;
   if (!data && home.isError) return <StatusView state="error" error={home.error} onRetry={() => void home.refetch()} />;
@@ -127,9 +134,10 @@ export function MandirHome() {
               />
               </View>
             </GestureDetector>
+            {firstVisit && <TodayDarshanGlow layout={layout} onDone={dismissGreetingGlow} />}
             <TithiStrip layout={layout} text={data?.today.tithiText} />
             {offline && <OfflineBanner layout={layout} />}
-            <Bells layout={layout} disabled={loading} />
+            <Bells layout={layout} disabled={loading} onRing={ringBell} />
             <OfferingRail layout={layout} disabled={loading} offeringsEnabled={offeringsEnabled} onPress={onRail} />
             <AartiThaliButton layout={layout} thali={data?.thali} disabled={loading} onPress={comingSoon} />
             <SpecialActions layout={layout} deity={deity} disabled={loading} onSpecial={comingSoon} onListen={comingSoon} />
