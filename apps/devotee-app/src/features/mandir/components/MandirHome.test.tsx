@@ -1,17 +1,20 @@
 import { MandirFlag } from '@mandir/shared-types';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { State } from 'react-native-gesture-handler';
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
 import { ApiError, apiRequest } from '@/api/client';
 import { queryKeys } from '@/api/keys';
 import { configWith, createTestQueryClient, homePayload, withQueryClient } from '@/test/mandir-fixtures';
 
+import { useDeitySelectionStore } from '../store/selection';
 import { MandirHome } from './MandirHome';
 
 jest.mock('@/api/client', () => ({ ...jest.requireActual('@/api/client'), apiRequest: jest.fn() }));
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual('react');
   return {
-    router: { navigate: jest.fn(), push: jest.fn() },
+    router: { navigate: jest.fn(), push: jest.fn(), back: jest.fn() },
     useFocusEffect: (cb: () => void | (() => void)) => useEffect(cb, [cb]),
   };
 });
@@ -39,7 +42,10 @@ async function renderHome(routes: Routes, flags: Record<string, boolean> = ALL_O
   return client;
 }
 
-beforeEach(() => api.mockReset());
+beforeEach(() => {
+  api.mockReset();
+  useDeitySelectionStore.setState({ selectedDeityId: null });
+});
 
 describe('VM-01 Mandir Home', () => {
   it('renders all zones from /mandir/home', async () => {
@@ -122,5 +128,56 @@ describe('VM-01 Mandir Home', () => {
     await renderHome({}, { ...ALL_ON, [MandirFlag.ENABLED]: false });
     expect(await screen.findByText('मंदिर अभी उपलब्ध नहीं है')).toBeTruthy();
     expect(api).not.toHaveBeenCalledWith('/mandir/home', expect.anything());
+  });
+
+  describe('VM-02 deity switching', () => {
+    const loaded = async () => {
+      await renderHome({ '/mandir/home': () => Promise.resolve(homePayload()) });
+      await screen.findByLabelText('हनुमान जी के दर्शन');
+    };
+
+    it('switches on a carousel tap', async () => {
+      await loaded();
+      await fireEvent.press(screen.getByLabelText('शिव जी'));
+      expect(screen.getByLabelText('शिव जी के दर्शन')).toBeTruthy();
+      expect(screen.getByLabelText('शिव जी')).toHaveProp('accessibilityState', { selected: true });
+    });
+
+    it('swipes left to the next deity and right to the previous one, wrapping around', async () => {
+      await loaded();
+      const swipe = async (translationX: number) =>
+        act(() =>
+          fireGestureHandler(getByGestureTestId('mandir-swipe'), [
+            { state: State.BEGAN, translationX: 0 },
+            { state: State.ACTIVE, translationX: translationX / 2 },
+            { state: State.END, translationX, velocityX: 0 },
+          ]),
+        );
+      await swipe(-120);
+      expect(screen.getByLabelText('शिव जी के दर्शन')).toBeTruthy();
+      await swipe(120);
+      await swipe(120);
+      expect(screen.getByLabelText('गणेश जी के दर्शन')).toBeTruthy(); // wrapped from the first to the last
+      await swipe(20); // too short: no switch
+      expect(screen.getByLabelText('गणेश जी के दर्शन')).toBeTruthy();
+    });
+
+    it('switches with the screen reader adjust actions', async () => {
+      await loaded();
+      const scene = screen.getByTestId('mandir-garbhagriha');
+      await fireEvent(scene, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+      expect(screen.getByLabelText('शिव जी के दर्शन')).toBeTruthy();
+      await fireEvent(scene, 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+      expect(screen.getByLabelText('हनुमान जी के दर्शन')).toBeTruthy();
+    });
+
+    it('opens Sangrah from the carousel + and the rail', async () => {
+      const { router } = jest.requireMock('expo-router');
+      await loaded();
+      await fireEvent.press(screen.getByLabelText('देवता जोड़ें'));
+      await fireEvent.press(screen.getByLabelText('संग्रह'));
+      expect(router.push).toHaveBeenCalledTimes(2);
+      expect(router.push).toHaveBeenCalledWith('/sangrah');
+    });
   });
 });

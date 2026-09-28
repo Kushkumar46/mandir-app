@@ -71,7 +71,7 @@ export function homePayload(overrides: Partial<MandirHome> = {}): MandirHome {
 }
 
 export function createTestQueryClient() {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
+  return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
 }
 
 export function withQueryClient(client: QueryClient) {

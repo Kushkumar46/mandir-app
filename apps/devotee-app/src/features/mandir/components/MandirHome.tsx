@@ -3,7 +3,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
+import { type AccessibilityActionEvent, type LayoutChangeEvent, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useFlag } from '@/features/config/flags';
 import { StatusView } from '@/features/shell/StatusView';
@@ -13,6 +14,8 @@ import { AppText, colors, MIN_TAP_TARGET, radius, spacing } from '@/theme';
 
 import { useMandirHome, usePrefetchDeityImages } from '../hooks/useMandirHome';
 import { coverRect, DEITY_IMAGE_ASPECT, mandirLayout, pickImageVariant, type Size } from '../layout';
+import { adjacentIndex, swipeDirection } from '../sangrah';
+import { useDeitySelectionStore } from '../store/selection';
 import { DeityScene } from './DeityScene';
 import { AartiThaliButton, Bells, OfferingRail, OfflineBanner, type RailAction, SpecialActions, TithiStrip } from './SceneControls';
 import { TopBar } from './TopBar';
@@ -27,6 +30,7 @@ export function MandirHome() {
   const language = useLanguageStore((s) => s.language);
   const offeringsEnabled = useFlag(MandirFlag.OFFERINGS);
   const { enabled, home, data, deity, todayOfferings, offline } = useMandirHome();
+  const select = useDeitySelectionStore((s) => s.select);
   const [area, setArea] = useState<Size | null>(null);
   const [focused, setFocused] = useState(false);
 
@@ -50,7 +54,32 @@ export function MandirHome() {
   const loading = !data;
   const deityName = deity ? pickLocalized(language, deity.nameHi, deity.nameEn) : undefined;
   const comingSoon = () => showToast(t('mandir.comingSoon'));
-  const openSangrah = comingSoon;
+  const openSangrah = () => router.push('/sangrah');
+  const deities = data?.deities ?? [];
+
+  // VM-02: next/previous deity (swipe on the garbhagriha, or the screen reader's adjust actions).
+  const switchBy = (direction: 1 | -1) => {
+    const next = deities[adjacentIndex(deities.findIndex((d) => d.id === deity?.id), deities.length, direction)];
+    if (next && next.id !== deity?.id) select(next.id);
+  };
+  const sceneGesture = Gesture.Race(
+    Gesture.Pan()
+      .runOnJS(true)
+      .enabled(deities.length > 1)
+      .withTestId('mandir-swipe')
+      .activeOffsetX([-24, 24])
+      .failOffsetY([-20, 20])
+      .onEnd((e) => {
+        const direction = swipeDirection(e.translationX, e.velocityX);
+        if (direction) switchBy(direction);
+      }),
+    // VM-04 darshan chooser (T18)
+    Gesture.LongPress().runOnJS(true).enabled(!loading).minDuration(500).onStart(comingSoon),
+  );
+  const onSceneAction = (e: AccessibilityActionEvent) => {
+    if (e.nativeEvent.actionName === 'increment') switchBy(1);
+    if (e.nativeEvent.actionName === 'decrement') switchBy(-1);
+  };
 
   const onRail = (action: RailAction) => {
     if (action === 'SANGRAH') openSangrah();
@@ -72,16 +101,22 @@ export function MandirHome() {
         selectedId={deity?.id}
         onProfile={() => router.navigate('/profile')}
         onCoins={comingSoon} // VM-07 coins (T15)
+        onSelectDeity={select}
         onAddDeity={openSangrah}
       />
       <View style={styles.scene} onLayout={onLayout} testID="mandir-scene">
         {layout && (
           <>
-            <View
-              style={StyleSheet.absoluteFill}
-              accessible={!!deityName}
-              accessibilityLabel={deityName ? t('mandir.sceneA11y', { name: deityName }) : undefined}
-            >
+            <GestureDetector gesture={sceneGesture}>
+              <View
+                style={StyleSheet.absoluteFill}
+                accessible={!!deityName}
+                accessibilityRole="adjustable"
+                accessibilityLabel={deityName ? t('mandir.sceneA11y', { name: deityName }) : undefined}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={onSceneAction}
+                testID="mandir-garbhagriha"
+              >
               <DeityScene
                 layout={layout}
                 theme={data?.theme ?? null}
@@ -90,7 +125,8 @@ export function MandirHome() {
                 variant={variant}
                 loading={loading}
               />
-            </View>
+              </View>
+            </GestureDetector>
             <TithiStrip layout={layout} text={data?.today.tithiText} />
             {offline && <OfflineBanner layout={layout} />}
             <Bells layout={layout} disabled={loading} />

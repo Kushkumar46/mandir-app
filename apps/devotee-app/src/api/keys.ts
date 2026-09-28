@@ -2,4 +2,5 @@
 export const queryKeys = {
   config: ['config'] as const,
   mandirHome: ['mandir', 'home'] as const,
+  deities: ['deities'] as const,
 };

@@ -59,5 +59,23 @@
     "version": "Version",
     "environment": "Environment",
     "server": "Server"
+  },
+  "sangrah": {
+    "title": "Sangrah",
+    "count": "{{count}}/{{max}} deities",
+    "myMandir": "My mandir",
+    "allDeities": "All deities",
+    "inMandir": "In my mandir",
+    "dragHint": "Press and hold, then drag to change the order. The ⭐ deity opens first.",
+    "pin": "Make main deity",
+    "unpin": "Remove main deity",
+    "remove": "Remove from mandir",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "minReached": "Your mandir needs at least one deity",
+    "maxReached": "You can keep at most {{max}} deities in your mandir",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Could not save"
   }
 }

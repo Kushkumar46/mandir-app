@@ -2,6 +2,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { HomeDeity, ImageVariantUrls, MandirTheme, TodayOfferings } from '@mandir/shared-types';
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { colors } from '@/theme';
 
@@ -17,8 +18,12 @@ type Props = {
   todayOfferings: TodayOfferings | undefined;
   variant: keyof ImageVariantUrls;
   loading: boolean;
-  deityLabel?: string;
 };
+
+/** VM-02: switching deity cross-fades the deity layer and its offerings. */
+export const CROSS_FADE_MS = 250;
+const crossFadeIn = FadeIn.duration(CROSS_FADE_MS);
+const crossFadeOut = FadeOut.duration(CROSS_FADE_MS);
 
 const abs = (r: Rect) => ({ position: 'absolute' as const, left: r.x, top: r.y, width: r.width, height: r.height });
 
@@ -27,7 +32,7 @@ const abs = (r: Rect) => ({ position: 'absolute' as const, left: r.x, top: r.y, 
  * The deity image fills the frame's arch opening (`cover`); the frame hides everything outside it.
  * Without a frame the rounded, gold-edged deity box still reads as an arch.
  */
-export function DeityScene({ layout, theme, deity, todayOfferings, variant, loading, deityLabel }: Props) {
+export function DeityScene({ layout, theme, deity, todayOfferings, variant, loading }: Props) {
   const { stage, arch } = layout;
   const archBox = { ...abs(arch), borderTopLeftRadius: arch.width / 2, borderTopRightRadius: arch.width / 2 };
 
@@ -42,7 +47,9 @@ export function DeityScene({ layout, theme, deity, todayOfferings, variant, load
         {loading ? (
           <Shimmer style={StyleSheet.absoluteFill} />
         ) : (
-          <DeityImage key={deity?.id} image={deity?.image ?? null} variant={variant} accessibilityLabel={deityLabel} />
+          <Animated.View key={deity?.id ?? 'none'} entering={crossFadeIn} exiting={crossFadeOut} style={StyleSheet.absoluteFill}>
+            <DeityImage image={deity?.image ?? null} variant={variant} />
+          </Animated.View>
         )}
       </View>
 
@@ -51,7 +58,9 @@ export function DeityScene({ layout, theme, deity, todayOfferings, variant, load
 
       {/* effects: today's offerings */}
       {!loading && deity && todayOfferings && (
-        <FeetOfferings layout={layout} deity={deity} today={todayOfferings} />
+        <Animated.View key={deity.id} entering={crossFadeIn} exiting={crossFadeOut} style={StyleSheet.absoluteFill}>
+          <FeetOfferings layout={layout} deity={deity} today={todayOfferings} />
+        </Animated.View>
       )}
     </View>
   );
