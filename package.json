@@ -10,6 +10,7 @@
     "dev:infra:down": "docker compose down",
     "dev:api": "turbo run dev --filter=@mandir/api",
     "dev:admin": "turbo run dev --filter=@mandir/admin-web",
+    "dev:lan": "node scripts/dev-lan.mjs",
     "dev:app": "turbo run build --filter=@mandir/devotee-app^... && pnpm --filter @mandir/devotee-app start",
     "db:migrate": "pnpm --filter @mandir/api db:migrate",
     "db:seed": "pnpm --filter @mandir/api db:seed",

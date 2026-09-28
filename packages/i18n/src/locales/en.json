@@ -4,15 +4,32 @@
     "loading": "Loading…",
     "retry": "Try again",
     "offline": "No internet connection",
-    "somethingWentWrong": "Something went wrong"
+    "somethingWentWrong": "Something went wrong",
+    "serverUnreachable": "Cannot reach the server. Check your internet and try again."
   },
   "update": {
     "title": "A new version is available",
     "body": "Please update the app to continue.",
     "cta": "Update"
   },
-  "home": {
-    "welcome": "🙏 Welcome",
-    "comingSoon": "Virtual Mandir is coming soon"
+  "tabs": {
+    "mandir": "Mandir",
+    "profile": "Profile"
+  },
+  "mandir": {
+    "todayDarshan": "Today's darshan",
+    "coins": "{{count}} coins",
+    "comingSoon": "The full mandir is coming soon",
+    "disabled": "The mandir is not available right now"
+  },
+  "profile": {
+    "title": "Profile",
+    "language": "Language",
+    "languageHi": "हिन्दी",
+    "languageEn": "English",
+    "appInfo": "App info",
+    "version": "Version",
+    "environment": "Environment",
+    "server": "Server"
   }
 }

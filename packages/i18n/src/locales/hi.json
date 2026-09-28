@@ -4,15 +4,32 @@
     "loading": "लोड हो रहा है…",
     "retry": "फिर से कोशिश करें",
     "offline": "इंटरनेट कनेक्शन नहीं है",
-    "somethingWentWrong": "कुछ गलत हो गया"
+    "somethingWentWrong": "कुछ गलत हो गया",
+    "serverUnreachable": "सर्वर से नहीं जुड़ पा रहे। इंटरनेट जाँचें और फिर से कोशिश करें।"
   },
   "update": {
     "title": "नया संस्करण उपलब्ध है",
     "body": "ऐप का उपयोग जारी रखने के लिए कृपया अपडेट करें।",
     "cta": "अपडेट करें"
   },
-  "home": {
-    "welcome": "🙏 आपका स्वागत है",
-    "comingSoon": "वर्चुअल मंदिर जल्द आ रहा है"
+  "tabs": {
+    "mandir": "मंदिर",
+    "profile": "प्रोफ़ाइल"
+  },
+  "mandir": {
+    "todayDarshan": "आज का दर्शन",
+    "coins": "{{count}} सिक्के",
+    "comingSoon": "पूरा मंदिर जल्द आ रहा है",
+    "disabled": "मंदिर अभी उपलब्ध नहीं है"
+  },
+  "profile": {
+    "title": "प्रोफ़ाइल",
+    "language": "भाषा",
+    "languageHi": "हिन्दी",
+    "languageEn": "English",
+    "appInfo": "ऐप जानकारी",
+    "version": "संस्करण",
+    "environment": "वातावरण",
+    "server": "सर्वर"
   }
 }

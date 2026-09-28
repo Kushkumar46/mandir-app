@@ -68,6 +68,16 @@ eas submit --platform android
 eas submit --platform ios
 ```
 
+### Testing on a real phone (local API)
+
+The phone cannot reach `localhost` on the computer. With the phone on the same WiFi:
+
+1. `pnpm dev:lan` — detects the computer's LAN IP and writes `API_URL` to `apps/devotee-app/.env.local` and `CDN_BASE_URL` + `S3_PUBLIC_ENDPOINT` to `apps/api/.env` (the host used in CDN and presigned storage URLs). Re-run whenever the IP changes (or pass it: `pnpm dev:lan 192.168.1.20`).
+2. Restart `pnpm dev:api` and `pnpm dev:app`; open the development build and connect to the Metro URL.
+3. The firewall must allow inbound TCP 4000 (API), 9000 (storage) and 8081 (Metro) on the WiFi's network profile.
+
+Without `API_URL`, local dev builds fall back to the Metro host IP on port 4000. Development builds are debug builds, so plain `http://` works; staging/production use HTTPS. The Profile tab shows the server URL the app uses (non-production).
+
 Over-the-air JS updates (no store review for JS/asset-only fixes): `eas update --branch production`. Native changes always need a new build.
 
 ## 6. Store compliance checklist (Phase 1)

@@ -17,6 +17,11 @@ export const envSchema = z
     DEV_AUTH: booleanString,
 
     S3_ENDPOINT: z.url().optional(),
+    /**
+     * Endpoint put into presigned URLs handed to clients, when they reach storage by another host
+     * than the API does (local dev on a phone: http://<LAN IP>:9000). Defaults to S3_ENDPOINT.
+     */
+    S3_PUBLIC_ENDPOINT: z.url().optional(),
     S3_REGION: z.string().default('auto'),
     S3_ACCESS_KEY_ID: z.string().min(1),
     S3_SECRET_ACCESS_KEY: z.string().min(1),

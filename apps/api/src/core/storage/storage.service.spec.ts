@@ -48,6 +48,17 @@ describe('StorageService', () => {
     expect(get).toContain('X-Amz-Expires=60');
   });
 
+  it('signs client URLs for S3_PUBLIC_ENDPOINT when set', async () => {
+    const lan = new StorageService({
+      env: { ...config.env, S3_PUBLIC_ENDPOINT: 'http://192.168.1.20:9000' },
+    } as unknown as AppConfigService);
+    const get = await lan.presignGet('community/pending/x.jpg');
+    expect(get.startsWith('http://192.168.1.20:9000/media-private/community/pending/x.jpg?')).toBe(true);
+    const put = await lan.presignPut('community/pending/x.jpg', 'image/jpeg');
+    expect(put.startsWith('http://192.168.1.20:9000/')).toBe(true);
+    expect(await storage.presignGet('official/x.webp')).toMatch(/^http:\/\/localhost:9000\//);
+  });
+
   it('puts objects into the bucket that owns the key, cacheable only when public', async () => {
     const send = vi.spyOn(storage.client, 'send').mockResolvedValue({} as never);
     await storage.put('official/x.webp', new Uint8Array([1]), 'image/webp');

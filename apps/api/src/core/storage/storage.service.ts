@@ -49,6 +49,8 @@ export function bucketKindFor(objectKey: string): BucketKind {
 @Injectable()
 export class StorageService {
   private readonly s3: S3Client;
+  /** Signs URLs for clients; same as `s3` unless S3_PUBLIC_ENDPOINT differs (signing never connects). */
+  private readonly presigner: S3Client;
   private readonly buckets: Record<BucketKind, string>;
   private readonly cdnBaseUrl: string;
 
@@ -56,12 +58,16 @@ export class StorageService {
     const env = config.env;
     this.buckets = { public: env.S3_PUBLIC_BUCKET, private: env.S3_PRIVATE_BUCKET };
     this.cdnBaseUrl = env.CDN_BASE_URL;
-    this.s3 = new S3Client({
-      region: env.S3_REGION,
-      endpoint: env.S3_ENDPOINT,
-      forcePathStyle: env.S3_FORCE_PATH_STYLE,
-      credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
-    });
+    const client = (endpoint: string | undefined) =>
+      new S3Client({
+        region: env.S3_REGION,
+        endpoint,
+        forcePathStyle: env.S3_FORCE_PATH_STYLE,
+        credentials: { accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
+      });
+    this.s3 = client(env.S3_ENDPOINT);
+    this.presigner =
+      env.S3_PUBLIC_ENDPOINT && env.S3_PUBLIC_ENDPOINT !== env.S3_ENDPOINT ? client(env.S3_PUBLIC_ENDPOINT) : this.s3;
   }
 
   /** Bucket name for an object key. */
@@ -76,7 +82,7 @@ export class StorageService {
   /** Presigned PUT for direct client uploads. The client must send the same Content-Type. */
   presignPut(objectKey: string, contentType: string, expiresInSeconds = 600): Promise<string> {
     return getSignedUrl(
-      this.s3,
+      this.presigner,
       new PutObjectCommand({ Bucket: this.bucketFor(objectKey), Key: objectKey, ContentType: contentType }),
       { expiresIn: expiresInSeconds },
     );
@@ -85,7 +91,7 @@ export class StorageService {
   /** Short-lived signed GET — the only way to serve private-bucket objects. */
   presignGet(objectKey: string, expiresInSeconds = 300): Promise<string> {
     return getSignedUrl(
-      this.s3,
+      this.presigner,
       new GetObjectCommand({ Bucket: this.bucketFor(objectKey), Key: objectKey }),
       { expiresIn: expiresInSeconds },
     );

@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next';
 
 const i18n = createInstance();
 
-// Hindi by default; the user's saved language is applied by the app shell (Virtual Mandir T8).
+// Hindi by default; switching goes through `useLanguageStore` (src/lib/language.ts).
 void i18n.use(initReactI18next).init({
   resources,
   lng: DEFAULT_LANGUAGE,
