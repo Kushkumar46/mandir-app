@@ -8,7 +8,8 @@
     "serverUnreachable": "Cannot reach the server. Check your internet and try again.",
     "back": "Back",
     "connectInternet": "Connect to the internet",
-    "close": "Close"
+    "close": "Close",
+    "tryLater": "Please try again in a moment"
   },
   "update": {
     "title": "A new version is available",
@@ -48,6 +49,8 @@
     "aarti": "Do aarti",
     "offerSpecial": "Offer {{name}}",
     "listen": "Listen",
+    "listenStop": "Stop",
+    "listenStopA11y": "Stop listening to the aarti",
     "emptyMandir": "There are no deities in your mandir",
     "openSangrah": "Choose deities",
     "offering": {
@@ -86,6 +89,42 @@
       "STREAK_108": "108-day maha bhakt",
       "DARSHAN_SEVAK": "Darshan sevak",
       "TIRTH_YATRI": "Tirth yatri"
+    },
+    "aartiMode": {
+      "title": "Aarti of {{name}}",
+      "close": "Close aarti",
+      "play": "Play aarti",
+      "pause": "Pause aarti",
+      "auto": "Auto",
+      "autoA11y": "Move the thali automatically",
+      "shankh": "Blow the shankh",
+      "thali": "Aarti thali",
+      "thaliHint": "Move the thali in circles with your finger",
+      "circles": "Circles {{count}}/{{min}}",
+      "loading": "Loading aarti…",
+      "loadFailed": "Could not load the aarti",
+      "none": "No aarti available right now",
+      "unavailable": "This aarti is not available right now",
+      "confirmTitle": "Aarti not finished",
+      "confirmBody": "Do you want to stop the aarti midway?",
+      "continue": "Continue aarti",
+      "leave": "Close",
+      "done": "Aarti complete 🙏",
+      "saving": "Saving…",
+      "saveFailed": "Could not save the aarti",
+      "streak_one": "🔥 {{count}}-day streak",
+      "streak_other": "🔥 {{count}}-day streak",
+      "share": "Share darshan"
+    },
+    "thali": {
+      "lockedA11y_one": "{{name}}, unlock for {{count}} coin",
+      "lockedA11y_other": "{{name}}, unlock for {{count}} coins",
+      "unlockTitle": "Unlock thali",
+      "unlockBody": "Unlock once, use it forever.",
+      "unlockCta_one": "Unlock — {{count}} coin",
+      "unlockCta_other": "Unlock — {{count}} coins",
+      "unlocked": "{{name}} unlocked 🙏",
+      "unavailable": "This thali is not available right now"
     }
   },
   "profile": {
@@ -98,7 +137,8 @@
     "environment": "Environment",
     "server": "Server",
     "sound": "Sound",
-    "startupShankh": "Shankh sound on the first darshan of the day"
+    "startupShankh": "Shankh sound on the first darshan of the day",
+    "aartiInSilentMode": "Play aarti even in silent mode"
   },
   "sangrah": {
     "title": "Sangrah",

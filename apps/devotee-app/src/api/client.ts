@@ -114,3 +114,38 @@ export async function apiRequest<S extends z.ZodType>(
   }
   return data.data;
 }
+
+/**
+ * GETs a public CDN JSON file (e.g. an aarti lyrics timeline) — no `/v1`, no envelope, no app
+ * headers — and validates it. Throws `ApiError` like `apiRequest`.
+ */
+export async function fetchPublicJson<S extends z.ZodType>(
+  url: string,
+  { schema, signal, timeoutMs = 15_000 }: { schema: S; signal?: AbortSignal; timeoutMs?: number },
+  fetchImpl: typeof fetch = fetch,
+): Promise<z.infer<S>> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
+
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+  } catch (e) {
+    if (timedOut) throw new ApiError(0, ClientErrorCode.TIMEOUT, `Request timed out: GET ${url}`);
+    if (signal?.aborted) throw e;
+    throw new ApiError(0, ClientErrorCode.NETWORK, `Cannot reach ${url}: ${String(e)}`);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+  if (!res.ok) throw new ApiError(res.status, ClientErrorCode.BAD_RESPONSE, `HTTP ${res.status} for GET ${url}`);
+  const parsed = schema.safeParse(await res.json().catch(() => undefined));
+  if (!parsed.success) throw new ApiError(res.status, ClientErrorCode.BAD_RESPONSE, `Unexpected file at ${url}: ${parsed.error.message}`);
+  return parsed.data;
+}

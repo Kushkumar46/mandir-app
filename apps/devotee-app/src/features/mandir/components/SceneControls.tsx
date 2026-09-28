@@ -130,17 +130,20 @@ export function AartiThaliButton({
   );
 }
 
-/** Bottom right: deity-special offering badge (→ VM-05 `special`) and Listen (default aarti in the background). */
+/** Bottom right: deity-special offering badge (→ VM-05 `special`) and Listen / stop (default aarti in the background). */
 export function SpecialActions({
   layout,
   deity,
   disabled,
+  listening,
   onSpecial,
   onListen,
 }: {
   layout: MandirLayout;
   deity: HomeDeity | null;
   disabled: boolean;
+  /** This deity's aarti is playing in the background (the button then stops it). */
+  listening: boolean;
   onSpecial: () => void;
   onListen: () => void;
 }) {
@@ -175,14 +178,15 @@ export function SpecialActions({
       {deity?.defaultAartiId && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t('mandir.listen')}
+          accessibilityLabel={listening ? t('mandir.listenStopA11y') : t('mandir.listen')}
+          accessibilityState={{ selected: listening }}
           disabled={disabled}
           onPress={onListen}
           style={({ pressed }) => [styles.listen, pressed && styles.pressed]}
         >
-          <MaterialCommunityIcons name="headphones" size={20} color={colors.maroon} />
+          <MaterialCommunityIcons name={listening ? 'stop' : 'headphones'} size={20} color={colors.maroon} />
           <AppText variant="caption" style={styles.listenText}>
-            {t('mandir.listen')}
+            {listening ? t('mandir.listenStop') : t('mandir.listen')}
           </AppText>
         </Pressable>
       )}

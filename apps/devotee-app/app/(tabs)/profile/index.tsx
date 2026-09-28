@@ -15,7 +15,7 @@ export default function ProfileScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { language, setLanguage } = useLanguageStore();
-  const { startupShankh, setStartupShankh } = useSettingsStore();
+  const { startupShankh, setStartupShankh, aartiInSilentMode, setAartiInSilentMode } = useSettingsStore();
 
   return (
     <ScrollView
@@ -54,6 +54,15 @@ export default function ProfileScreen() {
             accessibilityLabel={t('profile.startupShankh')}
             value={startupShankh}
             onValueChange={setStartupShankh}
+            trackColor={{ true: colors.saffron }}
+          />
+        </View>
+        <View style={styles.switchRow}>
+          <AppText style={styles.switchLabel}>{t('profile.aartiInSilentMode')}</AppText>
+          <Switch
+            accessibilityLabel={t('profile.aartiInSilentMode')}
+            value={aartiInSilentMode}
+            onValueChange={setAartiInSilentMode}
             trackColor={{ true: colors.saffron }}
           />
         </View>

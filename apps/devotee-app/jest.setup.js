@@ -27,18 +27,33 @@ jest.mock('expo-file-system', () => {
   return { File, Paths: { document: { uri: 'file:///documents' } }, __files: files };
 });
 
-// expo-audio: players that record calls (src/lib/sound.ts, features/mandir/sounds.ts).
+// expo-audio: players that record calls (src/lib/sound.ts, features/mandir/sounds.ts,
+// features/mandir/aarti-player.ts). `player.__emit(status)` sends a playbackStatusUpdate.
 jest.mock('expo-audio', () => ({
   setAudioModeAsync: jest.fn(() => Promise.resolve()),
-  createAudioPlayer: jest.fn((source) => ({
-    source,
-    playing: false,
-    currentTime: 0,
-    play: jest.fn(),
-    pause: jest.fn(),
-    seekTo: jest.fn(() => Promise.resolve()),
-    remove: jest.fn(),
-  })),
+  createAudioPlayer: jest.fn((source, options) => {
+    const listeners = new Set();
+    return {
+      source,
+      options,
+      playing: false,
+      currentTime: 0,
+      play: jest.fn(),
+      pause: jest.fn(),
+      seekTo: jest.fn(() => Promise.resolve()),
+      remove: jest.fn(),
+      setActiveForLockScreen: jest.fn(),
+      clearLockScreenControls: jest.fn(),
+      addListener: jest.fn((event, cb) => {
+        const entry = { event, cb };
+        listeners.add(entry);
+        return { remove: () => listeners.delete(entry) };
+      }),
+      __emit(status) {
+        for (const l of listeners) if (l.event === 'playbackStatusUpdate') l.cb(status);
+      },
+    };
+  }),
 }));
 
 // @shopify/react-native-skia needs CanvasKit (WASM) under jest; the particle shower is the only

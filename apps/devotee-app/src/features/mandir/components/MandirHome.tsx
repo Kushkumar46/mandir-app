@@ -1,7 +1,7 @@
 import { MandirFlag, type OfferingKind } from '@mandir/shared-types';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, type LayoutChangeEvent, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -9,20 +9,24 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { CoinsNeededSheet } from '@/features/coins/CoinsNeededSheet';
 import { useFlag } from '@/features/config/flags';
 import { StatusView } from '@/features/shell/StatusView';
+import { setTabBarHidden } from '@/features/shell/tabBar';
 import { showToast } from '@/features/shell/Toast';
 import { track } from '@/lib/analytics';
 import { pickLocalized, useLanguageStore } from '@/lib/language';
 import { AppText, colors, MIN_TAP_TARGET, radius, spacing } from '@/theme';
 
+import { stopAarti } from '../aarti-player';
 import { useBellRinger } from '../hooks/useBells';
 import { dismissGreetingGlow, useFirstVisitOfDay } from '../hooks/useFirstVisitOfDay';
 import { useMandirHome, usePrefetchDeityImages } from '../hooks/useMandirHome';
+import { useListen } from '../hooks/useListen';
 import { feetSprites, useDeityOfferings, useOfferingFlow } from '../hooks/useOfferings';
 import { coverRect, DEITY_IMAGE_ASPECT, mandirLayout, pickImageVariant, type Size } from '../layout';
 import { coinsShort, displayTodayOfferings } from '../offerings';
 import { adjacentIndex, swipeDirection } from '../sangrah';
 import { useOfferingStore } from '../store/offerings';
 import { useDeitySelectionStore } from '../store/selection';
+import { AartiMode } from './aarti/AartiMode';
 import { Bells } from './Bells';
 import { DeityScene } from './DeityScene';
 import { OfferingEffects } from './offerings/OfferingEffects';
@@ -43,6 +47,9 @@ export function MandirHome() {
   const { enabled, home, data, deity, todayOfferings, offline } = useMandirHome();
   const select = useDeitySelectionStore((s) => s.select);
   const [area, setArea] = useState<Size | null>(null);
+  const [sceneTop, setSceneTop] = useState(0);
+  // VM-06 Aarti mode: full screen (covers the top bar; the tab bar is hidden while it is open).
+  const [aartiOpen, setAartiOpen] = useState(false);
   const [focused, setFocused] = useState(false);
 
   useFocusEffect(
@@ -70,6 +77,14 @@ export function MandirHome() {
     todayOfferings &&
     displayTodayOfferings(todayOfferings, active && active.deityId === deity?.id ? { kind: active.item.kind, before: active.before } : null);
   const sprites = offerings.data || (deity && lastOffered[deity.id]) ? feetSprites(offerings.data, deity ? lastOffered[deity.id] : undefined) : null;
+  const listen = useListen(deity);
+
+  useEffect(() => {
+    setTabBarHidden(aartiOpen);
+    return () => setTabBarHidden(false);
+  }, [aartiOpen]);
+  // Leaving the screen for good (e.g. the Mandir flag turned off) ends the aarti audio.
+  useEffect(() => () => stopAarti(), []);
 
   if (!enabled) return <StatusView state="message" message={t('mandir.disabled')} />;
   if (!data && home.isError) return <StatusView state="error" error={home.error} onRetry={() => void home.refetch()} />;
@@ -114,8 +129,9 @@ export function MandirHome() {
   };
 
   const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
+    const { width, height, y } = e.nativeEvent.layout;
     if (width !== area?.width || height !== area?.height) setArea({ width, height });
+    if (y !== sceneTop) setSceneTop(y);
   };
 
   return (
@@ -157,12 +173,23 @@ export function MandirHome() {
             </GestureDetector>
             <OfferingEffects layout={layout} deity={deity} />
             {firstVisit && <TodayDarshanGlow layout={layout} onDone={dismissGreetingGlow} />}
-            <TithiStrip layout={layout} text={data?.today.tithiText} />
             {offline && <OfflineBanner layout={layout} />}
-            <Bells layout={layout} disabled={loading} onRing={ringBell} />
-            <OfferingRail layout={layout} disabled={loading} offeringsEnabled={offeringsEnabled} onPress={onRail} />
-            <AartiThaliButton layout={layout} thali={data?.thali} disabled={loading} onPress={comingSoon} />
-            <SpecialActions layout={layout} deity={deity} disabled={loading} onSpecial={() => openOfferings('SPECIAL')} onListen={comingSoon} />
+            {!aartiOpen && (
+              <>
+                <TithiStrip layout={layout} text={data?.today.tithiText} />
+                <Bells layout={layout} disabled={loading} onRing={ringBell} />
+                <OfferingRail layout={layout} disabled={loading} offeringsEnabled={offeringsEnabled} onPress={onRail} />
+                <AartiThaliButton layout={layout} thali={data?.thali} disabled={loading || !deity} onPress={() => setAartiOpen(true)} />
+                <SpecialActions
+                  layout={layout}
+                  deity={deity}
+                  disabled={loading}
+                  listening={listen.listening}
+                  onSpecial={() => openOfferings('SPECIAL')}
+                  onListen={listen.toggle}
+                />
+              </>
+            )}
             {data && !deity && (
               <View style={styles.empty}>
                 <AppText variant="bodyLarge" style={styles.emptyText}>
@@ -176,6 +203,18 @@ export function MandirHome() {
           </>
         )}
       </View>
+      {aartiOpen && layout && area && deity && (
+        <AartiMode
+          sceneTop={sceneTop}
+          area={area}
+          layout={layout}
+          deity={deity}
+          thali={data?.thali ?? null}
+          balance={data?.coins.balance}
+          onRing={ringBell}
+          onClose={() => setAartiOpen(false)}
+        />
+      )}
       {sheet && deity && (
         <OfferingSheet
           kind={sheet}

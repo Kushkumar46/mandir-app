@@ -1,4 +1,15 @@
-import type { AppConfig, DeityOfferings, MakeOfferingResponse, MandirHome, OfferingItemView, OfferingKind } from '@mandir/shared-types';
+import type {
+  AartiCompleteResponse,
+  AartiLyrics,
+  AppConfig,
+  DeityAartis,
+  DeityOfferings,
+  MakeOfferingResponse,
+  MandirHome,
+  OfferingItemView,
+  OfferingKind,
+  ThaliList,
+} from '@mandir/shared-types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -126,6 +137,54 @@ export function offeringResponse(overrides: Partial<MakeOfferingResponse> = {}):
     badgesEarned: [],
     reward: null,
     todayOfferings: { flowers: 15, mala: true, diya: true, bhog: false },
+    ...overrides,
+  };
+}
+
+/** `GET /deities/:id/aartis`: the default aarti (30 s, like the seed) + a second one. */
+export function aartisPayload(deityId: string = HANUMAN): DeityAartis {
+  const aarti = (n: number, titleHi: string, titleEn: string, isDefault: boolean) => ({
+    id: uuid(n),
+    titleHi,
+    titleEn,
+    audioUrl: cdn(`audio/aarti/hanuman/${n}.m4a`),
+    lyricsUrl: cdn(`lyrics/aarti/hanuman/${n}.json`),
+    durationSec: 30,
+    version: 1,
+    isDefault,
+  });
+  return { deityId, items: [aarti(200, 'आरती कीजै हनुमान लला की', 'Aarti Kije Hanuman Lala Ki', true), aarti(201, 'हनुमान चालीसा', 'Hanuman Chalisa', false)] };
+}
+
+/** Lyrics timeline: one line every 5 s (like the seed). */
+export const LYRICS: AartiLyrics = [0, 5, 10, 15, 20, 25].map((t, i) => ({ t, line: `पंक्ति ${i + 1}` }));
+
+/** `GET /mandir/thalis`: free Pital (selected) + Chaandi 51 + Sona 108 (T7b seed). */
+export function thalisPayload(overrides: { unlocked?: string[] } = {}): ThaliList {
+  const item = (n: number, nameHi: string, nameEn: string, coinCost: number, flameStyle = 'single') => ({
+    id: uuid(n),
+    nameHi,
+    nameEn,
+    imageUrl: cdn(`official/thalis/${nameEn.toLowerCase()}/image.webp`),
+    flameStyle,
+    coinCost,
+    unlocked: coinCost === 0 || (overrides.unlocked ?? []).includes(uuid(n)),
+    selected: n === 400,
+  });
+  return {
+    selectedThaliId: uuid(400),
+    items: [item(400, 'पीतल की थाली', 'Pital', 0), item(401, 'चाँदी की थाली', 'Chaandi', 51), item(402, 'सोने की थाली', 'Sona', 108, 'pancha')],
+  };
+}
+
+/** `POST /mandir/rituals/aarti-complete` answer. */
+export function aartiCompleteResponse(overrides: Partial<AartiCompleteResponse> = {}): AartiCompleteResponse {
+  return {
+    ritualLogId: uuid(900),
+    coinsBalance: 44,
+    streak: { current: 6, longest: 12, doneToday: true },
+    rewards: [{ ruleKey: 'AARTI_COMPLETE', coins: 2 }],
+    badgesEarned: [],
     ...overrides,
   };
 }

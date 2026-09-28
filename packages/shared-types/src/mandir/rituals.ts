@@ -23,6 +23,14 @@ export const aartiViewSchema = z.object({
 });
 export type AartiView = z.infer<typeof aartiViewSchema>;
 
+/**
+ * Lyrics timeline at `lyricsUrl` (a CDN file, not an API envelope): `[{ t, line }]`, t in seconds,
+ * ascending. The current line is the last entry with `t ≤ currentTime` (§4.5).
+ */
+export const aartiLyricLineSchema = z.object({ t: z.number().min(0), line: z.string() });
+export const aartiLyricsSchema = z.array(aartiLyricLineSchema);
+export type AartiLyrics = z.infer<typeof aartiLyricsSchema>;
+
 /** `GET /v1/deities/:deityId/aartis` — active aartis, default first, then newest version. */
 export const deityAartisSchema = z.object({ deityId: z.uuid(), items: z.array(aartiViewSchema) });
 export type DeityAartis = z.infer<typeof deityAartisSchema>;

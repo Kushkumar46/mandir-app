@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ApiError, apiRequest, ClientErrorCode, type ClientContext } from './client';
+import { ApiError, apiRequest, ClientErrorCode, type ClientContext, fetchPublicJson } from './client';
 
 const schema = z.object({ ok: z.boolean() });
 
@@ -100,5 +100,26 @@ describe('apiRequest', () => {
       code: ClientErrorCode.TIMEOUT,
       status: 0,
     });
+  });
+});
+
+describe('fetchPublicJson (CDN files, e.g. lyrics)', () => {
+  const lyrics = z.array(z.object({ t: z.number(), line: z.string() }));
+  const url = 'http://192.168.1.20:9000/media-public/lyrics/aarti/hanuman/v1.json';
+
+  it('GETs the URL as is (no /v1, no envelope, no app headers) and validates it', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(response(200, [{ t: 0, line: 'जय' }]));
+    await expect(fetchPublicJson(url, { schema: lyrics }, fetchMock as unknown as typeof fetch)).resolves.toEqual([{ t: 0, line: 'जय' }]);
+    const [calledUrl, init] = fetchMock.mock.calls[0];
+    expect(calledUrl).toBe(url);
+    expect(init.headers).toEqual({ Accept: 'application/json' });
+  });
+
+  it('maps HTTP errors, bad files and network failures to ApiError', async () => {
+    const f = (r: unknown) => jest.fn().mockResolvedValue(r) as unknown as typeof fetch;
+    await expect(fetchPublicJson(url, { schema: lyrics }, f(response(404, {})))).rejects.toMatchObject({ status: 404, code: ClientErrorCode.BAD_RESPONSE });
+    await expect(fetchPublicJson(url, { schema: lyrics }, f(response(200, { data: [] })))).rejects.toMatchObject({ code: ClientErrorCode.BAD_RESPONSE });
+    const offline = jest.fn().mockRejectedValue(new TypeError('Network request failed')) as unknown as typeof fetch;
+    await expect(fetchPublicJson(url, { schema: lyrics }, offline)).rejects.toMatchObject({ status: 0, code: ClientErrorCode.NETWORK });
   });
 });

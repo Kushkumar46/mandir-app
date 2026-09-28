@@ -1,17 +1,37 @@
 import { type AudioPlayer, type AudioSource, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
-let sessionConfigured = false;
+type SessionMode = 'effects' | 'media';
+let sessionMode: SessionMode | null = null;
 
 /**
  * Short UI sounds (bells, shankh) mix with other apps' audio and play even when the phone is on
  * silent (docs/modules/01-virtual-mandir.md §4.5 default "Silent mode में भी बजाएं" = on).
- * Aarti playback (T13) sets its own mode while it runs.
+ * Aarti playback switches to the media mode while it runs (`configureMediaPlayback`).
  */
 export function configureSoundEffects() {
-  if (sessionConfigured) return;
-  sessionConfigured = true;
-  void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {
-    sessionConfigured = false;
+  if (sessionMode) return;
+  setSessionMode('effects', { playsInSilentMode: true, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false });
+}
+
+/**
+ * Aarti audio (§4.5): takes audio focus (other apps pause — required for the lock-screen controls),
+ * keeps playing in the background and with the screen locked, and follows the user's
+ * "Silent mode में भी बजाएं" setting. Bells and shankh still play on top (same app).
+ */
+export function configureMediaPlayback(playsInSilentMode: boolean) {
+  setSessionMode('media', { playsInSilentMode, interruptionMode: 'doNotMix', shouldPlayInBackground: true });
+}
+
+/** Back to the sound-effects mode once the aarti audio has stopped. */
+export function restoreSoundEffects() {
+  if (sessionMode === 'effects') return;
+  setSessionMode('effects', { playsInSilentMode: true, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false });
+}
+
+function setSessionMode(mode: SessionMode, options: Parameters<typeof setAudioModeAsync>[0]) {
+  sessionMode = mode;
+  void setAudioModeAsync(options).catch(() => {
+    if (sessionMode === mode) sessionMode = null;
   });
 }
 

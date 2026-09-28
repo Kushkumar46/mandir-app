@@ -4,12 +4,14 @@ import { Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { useFlag } from '@/features/config/flags';
+import { useTabBarStore } from '@/features/shell/tabBar';
 import { colors, fontFamily } from '@/theme';
 
-/** Bottom tabs (Mandir + Profile in Phase 1); a tab whose module flag is off is hidden. */
+/** Bottom tabs (Mandir + Profile in Phase 1); a tab whose module flag is off is hidden. Full-screen modes hide the bar. */
 export default function TabsLayout() {
   const { t } = useTranslation();
   const mandirEnabled = useFlag(MandirFlag.ENABLED);
+  const tabBarHidden = useTabBarStore((s) => s.hidden);
 
   return (
     <Tabs
@@ -17,7 +19,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.maroon,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.white, borderTopColor: colors.border },
+        tabBarStyle: tabBarHidden ? { display: 'none' } : { backgroundColor: colors.white, borderTopColor: colors.border },
         tabBarLabelStyle: { fontFamily: fontFamily.bold, fontSize: 13 },
         sceneStyle: { backgroundColor: colors.cream },
       }}

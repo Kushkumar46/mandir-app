@@ -21,8 +21,9 @@ import { track } from '@/lib/analytics';
 import { impactMedium } from '@/lib/haptics';
 
 import { preloadParticleSprites } from '../components/offerings/ParticleShower';
-import { decideOffering, offeringAnimation, rewardSummary } from '../offerings';
+import { decideOffering, offeringAnimation } from '../offerings';
 import { useOfferingStore } from '../store/offerings';
+import { useRewardToast } from './useRewardToast';
 
 /**
  * VM-05 items of the current deity. Loaded with the scene (not on sheet open) so the sheet opens
@@ -94,19 +95,7 @@ export function useOfferingFlow({ deityId, balance, today, offline }: Flow) {
   const queryClient = useQueryClient();
   const mutation = useMakeOfferingMutation();
 
-  const rewardToast = (res: MakeOfferingResponse) => {
-    const { coins, ruleKeys, badges } = rewardSummary(res);
-    for (const badge of badges) track('streak_badge_earned', { badge });
-    const parts: string[] = [];
-    if (coins > 0) {
-      const rule = ruleKeys.length === 1 ? t(`mandir.reward.rules.${ruleKeys[0]}`, { defaultValue: '' }) : '';
-      parts.push(rule ? `${t('mandir.reward.coins', { count: coins })} — ${rule}` : t('mandir.reward.coins', { count: coins }));
-    }
-    for (const badge of badges) {
-      parts.push(t('mandir.reward.badge', { name: t(`mandir.badges.${badge}`, { defaultValue: badge }) }));
-    }
-    if (parts.length) showToast(parts.join('\n'));
-  };
+  const rewardToast = useRewardToast();
 
   const onMade = (item: OfferingItemView, res: MakeOfferingResponse) => {
     track('offering_made', { itemId: item.id, kind: item.kind, coins: res.coinsSpent });
