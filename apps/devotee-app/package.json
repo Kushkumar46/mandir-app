@@ -24,6 +24,7 @@
     "@mandir/i18n": "workspace:*",
     "@mandir/shared-types": "workspace:*",
     "@mandir/ui": "workspace:*",
+    "@shopify/react-native-skia": "2.6.2",
     "@tanstack/react-query": "^5.104.0",
     "expo": "~57.0.25",
     "expo-audio": "~57.0.5",

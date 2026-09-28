@@ -1,5 +1,9 @@
 import {
   deityListItemSchema,
+  deityOfferingsSchema,
+  type MakeOfferingRequest,
+  type MakeOfferingResponse,
+  makeOfferingResponseSchema,
   type MandirHome,
   mandirHomeSchema,
   type SetMandirDeitiesRequest,
@@ -7,6 +11,8 @@ import {
 } from '@mandir/shared-types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+
+import { newIdempotencyKey } from '@/lib/uuid';
 
 import { apiRequest } from './client';
 import { queryKeys } from './keys';
@@ -70,4 +76,49 @@ export function applyDeityListToHome(home: MandirHome, { items }: SetMandirDeiti
       return d ? [{ ...d, position: i.position, isPinned: i.isPinned }] : [];
     });
   return { ...home, deities };
+}
+
+/**
+ * `GET /v1/deities/:deityId/offerings` — VM-05 items for the deity, grouped by kind. Items change
+ * only when admin edits them, so the list stays fresh for 10 minutes.
+ */
+export function useDeityOfferingsQuery(deityId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.deityOfferings(deityId ?? ''),
+    queryFn: ({ signal }) => apiRequest(`/deities/${deityId}/offerings`, { schema: deityOfferingsSchema, signal }),
+    enabled: enabled && !!deityId,
+    staleTime: 10 * 60_000,
+  });
+}
+
+/**
+ * `POST /v1/mandir/offerings` with a fresh `Idempotency-Key` per tap (coins are spent server-side;
+ * mutations never retry). On success the cached home takes the server's balance, streak and today's
+ * offerings for the deity — the app never computes the balance itself.
+ */
+export function useMakeOfferingMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ['mandir', 'offering'],
+    mutationFn: (body: MakeOfferingRequest) =>
+      apiRequest('/mandir/offerings', {
+        method: 'POST',
+        body,
+        schema: makeOfferingResponseSchema,
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    onSuccess: (res, body) => {
+      queryClient.setQueryData<MandirHome>(queryKeys.mandirHome, (home) => home && applyOfferingToHome(home, body.deityId, res));
+    },
+  });
+}
+
+/** The server's answer to an offering applied to the cached home payload. */
+export function applyOfferingToHome(home: MandirHome, deityId: string, res: MakeOfferingResponse): MandirHome {
+  return {
+    ...home,
+    coins: { balance: res.coinsBalance },
+    streak: { current: res.streak.current, longest: res.streak.longest, doneToday: res.streak.doneToday },
+    todayOfferings: { ...home.todayOfferings, [deityId]: res.todayOfferings },
+  };
 }

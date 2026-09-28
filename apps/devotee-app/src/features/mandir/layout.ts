@@ -83,6 +83,64 @@ export function pileStage(flowers: number): 0 | 1 | 2 | 3 {
   return 3;
 }
 
+/** Flower sprites in the pile per stage (§4.4 "pile grows in 3 stages"). */
+export const PILE_SPRITES = { 0: 0, 1: 3, 2: 6, 3: 10 } as const;
+
+export type SpriteSpot = { x: number; y: number; size: number; rotation: number };
+
+/**
+ * Flowers pile as a mound of sprites inside `slot`, bottom row widest. Deterministic (no random), so
+ * the pile looks the same on every render. `x`/`y` are the sprite centres.
+ */
+export function pileLayout(stage: 0 | 1 | 2 | 3, slot: Rect): SpriteSpot[] {
+  const rows = { 0: [], 1: [2, 1], 2: [3, 2, 1], 3: [4, 3, 2, 1] }[stage];
+  const size = Math.min(slot.height * (stage === 3 ? 0.5 : 0.58), slot.width / Math.max(rows[0] ?? 1, 2));
+  const spots: SpriteSpot[] = [];
+  rows.forEach((n, row) => {
+    for (let i = 0; i < n; i++) {
+      spots.push({
+        x: slot.x + slot.width / 2 + (i - (n - 1) / 2) * size * 0.78,
+        y: slot.y + slot.height - size / 2 - row * size * 0.5,
+        size,
+        rotation: ((row * 37 + i * 71) % 60) - 30,
+      });
+    }
+  });
+  return spots;
+}
+
+/**
+ * The feet area split into slots for today's offerings: diya (left), flowers pile (centre), bhog
+ * (right). Offering animations land in the same slots.
+ */
+export function feetSlots(feet: Rect): { diya: Rect; pile: Rect; bhog: Rect } {
+  const side = Math.min(feet.height * 0.8, feet.width * 0.24);
+  const bottom = feet.y + feet.height;
+  return {
+    diya: { x: feet.x, y: bottom - side, width: side, height: side },
+    bhog: { x: feet.x + feet.width - side, y: bottom - side, width: side, height: side },
+    pile: { x: feet.x + side + 2, y: feet.y, width: feet.width - 2 * side - 4, height: feet.height },
+  };
+}
+
+/** Pancha-deep: five small lamps in a shallow arc centred on the feet area, in front of the pile. */
+export function panchaDeepLayout(feet: Rect): SpriteSpot[] {
+  const size = Math.min(feet.height * 0.5, feet.width / 6);
+  const cx = feet.x + feet.width / 2;
+  return [-2, -1, 0, 1, 2].map((k) => ({
+    x: cx + k * size * 1.05,
+    y: feet.y + feet.height - size / 2 - (2 - Math.abs(k)) * size * 0.18,
+    size,
+    rotation: 0,
+  }));
+}
+
+/** Forehead of the deity (tilak, chunari): above the mala anchor, never above the image top. */
+export function foreheadPoint(arch: Rect, anchor: { x: number; y: number } | null, aspect = DEITY_IMAGE_ASPECT) {
+  const a = anchor ?? DEFAULT_ANCHOR;
+  return anchorPoint(arch, { x: a.x, y: Math.max(0.06, a.y - 0.16) }, aspect);
+}
+
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /** Rail buttons: 5 (Phool, Mala, Diya, Bhog, Sangrah); each ≥ 48dp tap target + label. */

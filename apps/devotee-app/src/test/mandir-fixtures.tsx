@@ -1,4 +1,4 @@
-import type { AppConfig, MandirHome } from '@mandir/shared-types';
+import type { AppConfig, DeityOfferings, MakeOfferingResponse, MandirHome, OfferingItemView, OfferingKind } from '@mandir/shared-types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -77,5 +77,55 @@ export function createTestQueryClient() {
 export function withQueryClient(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  };
+}
+
+/** `GET /deities/:id/offerings` for Hanuman ji: a free basic + a premium item per kind (§12 seed). */
+export function offeringsPayload(deityId: string = HANUMAN): DeityOfferings {
+  let n = 500;
+  const item = (kind: OfferingKind, nameHi: string, nameEn: string, animationKey: string, particleCount: number, coinCost: number): OfferingItemView => {
+    const slug = nameEn.toLowerCase().replace(/[^a-z]+/g, '-');
+    return {
+      id: uuid(n++),
+      kind,
+      nameHi,
+      nameEn,
+      iconUrl: cdn(`official/offerings/${slug}/icon.webp`),
+      spriteUrl: cdn(`official/offerings/${slug}/sprite.webp`),
+      animationKey,
+      particleCount,
+      coinCost,
+    };
+  };
+  return {
+    deityId,
+    groups: [
+      { kind: 'FLOWER', items: [item('FLOWER', 'गेंदा फूल', 'Marigold', 'falling_flowers', 20, 0), item('FLOWER', 'गुलाब', 'Rose', 'falling_flowers', 25, 5)] },
+      { kind: 'MALA', items: [item('MALA', 'गेंदे की माला', 'Marigold garland', 'mala_drop', 1, 0), item('MALA', 'गुलाब की माला', 'Rose garland', 'mala_drop', 1, 11)] },
+      { kind: 'DIYA', items: [item('DIYA', 'मिट्टी का दीया', 'Clay diya', 'diya_light', 1, 0), item('DIYA', 'पंचदीप', 'Pancha-deep', 'pancha_deep', 5, 11)] },
+      { kind: 'BHOG', items: [item('BHOG', 'मिश्री भोग', 'Mishri bhog', 'bhog_place', 1, 0), item('BHOG', 'छप्पन भोग', 'Chhappan bhog', 'bhog_place', 1, 21)] },
+      {
+        kind: 'SPECIAL',
+        items: [
+          item('SPECIAL', 'सिंदूर', 'Sindoor', 'sindoor_tilak', 1, 0),
+          item('SPECIAL', 'चंदन', 'Chandan', 'chandan_tilak', 1, 5),
+          item('SPECIAL', 'चुनरी', 'Chunari', 'chunari_drape', 1, 51),
+        ],
+      },
+    ],
+  };
+}
+
+/** `POST /mandir/offerings` answer. */
+export function offeringResponse(overrides: Partial<MakeOfferingResponse> = {}): MakeOfferingResponse {
+  return {
+    coinsBalance: 42,
+    coinsSpent: 0,
+    streak: { current: 5, longest: 12, doneToday: true },
+    rewards: [],
+    badgesEarned: [],
+    reward: null,
+    todayOfferings: { flowers: 15, mala: true, diya: true, bhog: false },
+    ...overrides,
   };
 }

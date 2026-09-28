@@ -16,6 +16,8 @@ allowBuilds:
   msgpackr-extract: true
   # Optional native watcher pulled in by jest; not needed (falls back to polling).
   '@parcel/watcher': false
+  # Downloads the prebuilt Skia libraries the native build links against (Virtual Mandir T12).
+  '@shopify/react-native-skia': true
 
 # Keep React Native tooling on the version matching Expo SDK 57's react-native.
 overrides:

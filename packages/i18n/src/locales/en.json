@@ -7,7 +7,8 @@
     "somethingWentWrong": "Something went wrong",
     "serverUnreachable": "Cannot reach the server. Check your internet and try again.",
     "back": "Back",
-    "connectInternet": "Connect to the internet"
+    "connectInternet": "Connect to the internet",
+    "close": "Close"
   },
   "update": {
     "title": "A new version is available",
@@ -48,7 +49,44 @@
     "offerSpecial": "Offer {{name}}",
     "listen": "Listen",
     "emptyMandir": "There are no deities in your mandir",
-    "openSangrah": "Choose deities"
+    "openSangrah": "Choose deities",
+    "offering": {
+      "title": {
+        "FLOWER": "Offer flowers",
+        "MALA": "Offer a garland",
+        "DIYA": "Light a diya",
+        "BHOG": "Offer bhog",
+        "SPECIAL": "Special offering"
+      },
+      "balance": "Your coins: {{count}}",
+      "free": "Free",
+      "costA11y_one": "{{count}} coin",
+      "costA11y_other": "{{count}} coins",
+      "empty": "No offerings available right now",
+      "unavailable": "This offering is not available right now",
+      "tooFast": "Please wait a moment and offer again"
+    },
+    "reward": {
+      "coins_one": "🎉 +{{count}} coin earned",
+      "coins_other": "🎉 +{{count}} coins earned",
+      "badge": "🏅 New badge: {{name}}",
+      "rules": {
+        "FIRST_DARSHAN_OF_DAY": "Today's first darshan",
+        "AARTI_COMPLETE": "Aarti completed",
+        "STREAK_7": "7-day sadhana",
+        "STREAK_21": "21-day sadhana",
+        "STREAK_51": "51-day sadhana",
+        "STREAK_108": "108-day sadhana"
+      }
+    },
+    "badges": {
+      "STREAK_7": "Seven-day devotee",
+      "STREAK_21": "21-day seeker",
+      "STREAK_51": "51-day seeker",
+      "STREAK_108": "108-day maha bhakt",
+      "DARSHAN_SEVAK": "Darshan sevak",
+      "TIRTH_YATRI": "Tirth yatri"
+    }
   },
   "profile": {
     "title": "Profile",
@@ -79,5 +117,13 @@
     "saving": "Saving…",
     "saved": "Saved",
     "saveFailed": "Could not save"
+  },
+  "coins": {
+    "neededTitle": "Not enough coins",
+    "needMore_one": "You need {{count}} more coin",
+    "needMore_other": "You need {{count}} more coins",
+    "youHave_one": "You have {{count}} coin",
+    "youHave_other": "You have {{count}} coins",
+    "buy": "Buy coins"
   }
 }

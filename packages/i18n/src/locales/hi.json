@@ -7,7 +7,8 @@
     "somethingWentWrong": "कुछ गलत हो गया",
     "serverUnreachable": "सर्वर से नहीं जुड़ पा रहे। इंटरनेट जाँचें और फिर से कोशिश करें।",
     "back": "वापस",
-    "connectInternet": "इंटरनेट से जुड़ें"
+    "connectInternet": "इंटरनेट से जुड़ें",
+    "close": "बंद करें"
   },
   "update": {
     "title": "नया संस्करण उपलब्ध है",
@@ -48,7 +49,44 @@
     "offerSpecial": "{{name}} चढ़ाएं",
     "listen": "सुनें",
     "emptyMandir": "आपके मंदिर में कोई देवता नहीं हैं",
-    "openSangrah": "देवता चुनें"
+    "openSangrah": "देवता चुनें",
+    "offering": {
+      "title": {
+        "FLOWER": "फूल चढ़ाएं",
+        "MALA": "माला चढ़ाएं",
+        "DIYA": "दीया जलाएं",
+        "BHOG": "भोग लगाएं",
+        "SPECIAL": "विशेष चढ़ावा"
+      },
+      "balance": "आपके सिक्के: {{count}}",
+      "free": "निःशुल्क",
+      "costA11y_one": "{{count}} सिक्का",
+      "costA11y_other": "{{count}} सिक्के",
+      "empty": "अभी कोई चढ़ावा उपलब्ध नहीं है",
+      "unavailable": "यह चढ़ावा अभी उपलब्ध नहीं है",
+      "tooFast": "थोड़ा रुककर फिर चढ़ाएं"
+    },
+    "reward": {
+      "coins_one": "🎉 +{{count}} सिक्का मिला",
+      "coins_other": "🎉 +{{count}} सिक्के मिले",
+      "badge": "🏅 नया बैज: {{name}}",
+      "rules": {
+        "FIRST_DARSHAN_OF_DAY": "आज का पहला दर्शन",
+        "AARTI_COMPLETE": "आरती सम्पन्न",
+        "STREAK_7": "7 दिन की साधना",
+        "STREAK_21": "21 दिन की साधना",
+        "STREAK_51": "51 दिन की साधना",
+        "STREAK_108": "108 दिन की साधना"
+      }
+    },
+    "badges": {
+      "STREAK_7": "सप्त दिवस भक्त",
+      "STREAK_21": "21 दिन के साधक",
+      "STREAK_51": "51 दिन के साधक",
+      "STREAK_108": "108 दिन के महाभक्त",
+      "DARSHAN_SEVAK": "दर्शन सेवक",
+      "TIRTH_YATRI": "तीर्थ यात्री"
+    }
   },
   "profile": {
     "title": "प्रोफ़ाइल",
@@ -79,5 +117,13 @@
     "saving": "सहेज रहे हैं…",
     "saved": "सहेजा गया",
     "saveFailed": "सहेजा नहीं जा सका"
+  },
+  "coins": {
+    "neededTitle": "सिक्के कम हैं",
+    "needMore_one": "आपको {{count}} सिक्का और चाहिए",
+    "needMore_other": "आपको {{count}} सिक्के और चाहिए",
+    "youHave_one": "आपके पास {{count}} सिक्का है",
+    "youHave_other": "आपके पास {{count}} सिक्के हैं",
+    "buy": "सिक्के खरीदें"
   }
 }

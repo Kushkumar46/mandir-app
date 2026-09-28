@@ -2,9 +2,13 @@ import {
   anchorPoint,
   archRect,
   coverStage,
+  feetSlots,
+  foreheadPoint,
   mandirLayout,
   overlaps,
+  panchaDeepLayout,
   pickImageVariant,
+  pileLayout,
   pileStage,
   RAIL_ITEM_MIN,
   RAIL_ITEMS,
@@ -114,4 +118,40 @@ describe.each(Object.entries(PHONES))('mandirLayout on %s', (_name, area) => {
 it('fits all 5 rail items without scrolling on a 360×800 phone', () => {
   expect(mandirLayout(PHONES.small360).rail.scrolls).toBe(false);
   expect(mandirLayout(PHONES.large412).rail.scrolls).toBe(false);
+});
+
+describe('feet area (T12)', () => {
+  const feet = mandirLayout({ width: 360, height: 600 }).feet;
+  const inside = (r: { x: number; y: number; width: number; height: number }) =>
+    r.x >= feet.x - 0.01 && r.y >= feet.y - 0.01 && r.x + r.width <= feet.x + feet.width + 0.01 && r.y + r.height <= feet.y + feet.height + 0.01;
+
+  it('splits into diya, pile and bhog slots that do not overlap', () => {
+    const { diya, pile, bhog } = feetSlots(feet);
+    for (const r of [diya, pile, bhog]) expect(inside(r)).toBe(true);
+    expect(overlaps(diya, pile)).toBe(false);
+    expect(overlaps(pile, bhog)).toBe(false);
+    expect(diya.width).toBeGreaterThanOrEqual(28);
+  });
+
+  it('grows the pile in 3 stages (3, 6, 10 flowers) inside the pile slot', () => {
+    const { pile } = feetSlots(feet);
+    expect([0, 1, 2, 3].map((s) => pileLayout(s as 0 | 1 | 2 | 3, pile).length)).toEqual([0, 3, 6, 10]);
+    for (const spot of pileLayout(3, pile)) {
+      expect(spot.x).toBeGreaterThanOrEqual(pile.x);
+      expect(spot.x).toBeLessThanOrEqual(pile.x + pile.width);
+      expect(spot.y + spot.size / 2).toBeLessThanOrEqual(pile.y + pile.height + 0.01);
+    }
+  });
+
+  it('places the five pancha-deep lamps within the feet area', () => {
+    const spots = panchaDeepLayout(feet);
+    expect(spots).toHaveLength(5);
+    for (const s of spots) expect(inside({ x: s.x - s.size / 2, y: s.y - s.size / 2, width: s.size, height: s.size })).toBe(true);
+  });
+
+  it('puts the forehead above the mala anchor', () => {
+    const { arch } = mandirLayout({ width: 360, height: 600 });
+    expect(foreheadPoint(arch, null).y).toBeLessThan(anchorPoint(arch, null).y);
+    expect(foreheadPoint(arch, { x: 0.5, y: 0.1 }).y).toBeGreaterThanOrEqual(anchorPoint(arch, { x: 0.5, y: 0.06 }).y - 0.01);
+  });
 });

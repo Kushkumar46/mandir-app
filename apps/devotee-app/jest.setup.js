@@ -40,3 +40,20 @@ jest.mock('expo-audio', () => ({
     remove: jest.fn(),
   })),
 }));
+
+// @shopify/react-native-skia needs CanvasKit (WASM) under jest; the particle shower is the only
+// Skia user, so a stub is enough: the canvas renders as a View, sprites decode instantly.
+jest.mock('@shopify/react-native-skia', () => {
+  const { View } = require('react-native');
+  const image = { width: () => 64, height: () => 64 };
+  return {
+    Canvas: ({ children, ...props }) => require('react').createElement(View, props, children),
+    Atlas: () => null,
+    rect: (x, y, width, height) => ({ x, y, width, height }),
+    useRSXformBuffer: () => ({ value: [] }),
+    Skia: {
+      Data: { fromURI: () => Promise.resolve({}) },
+      Image: { MakeImageFromEncoded: () => image },
+    },
+  };
+});

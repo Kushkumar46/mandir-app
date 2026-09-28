@@ -1,4 +1,4 @@
-import { MandirFlag } from '@mandir/shared-types';
+import { MandirFlag, type OfferingKind } from '@mandir/shared-types';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
@@ -6,20 +6,27 @@ import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, type LayoutChangeEvent, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
+import { CoinsNeededSheet } from '@/features/coins/CoinsNeededSheet';
 import { useFlag } from '@/features/config/flags';
 import { StatusView } from '@/features/shell/StatusView';
 import { showToast } from '@/features/shell/Toast';
+import { track } from '@/lib/analytics';
 import { pickLocalized, useLanguageStore } from '@/lib/language';
 import { AppText, colors, MIN_TAP_TARGET, radius, spacing } from '@/theme';
 
 import { useBellRinger } from '../hooks/useBells';
 import { dismissGreetingGlow, useFirstVisitOfDay } from '../hooks/useFirstVisitOfDay';
 import { useMandirHome, usePrefetchDeityImages } from '../hooks/useMandirHome';
+import { feetSprites, useDeityOfferings, useOfferingFlow } from '../hooks/useOfferings';
 import { coverRect, DEITY_IMAGE_ASPECT, mandirLayout, pickImageVariant, type Size } from '../layout';
+import { coinsShort, displayTodayOfferings } from '../offerings';
 import { adjacentIndex, swipeDirection } from '../sangrah';
+import { useOfferingStore } from '../store/offerings';
 import { useDeitySelectionStore } from '../store/selection';
 import { Bells } from './Bells';
 import { DeityScene } from './DeityScene';
+import { OfferingEffects } from './offerings/OfferingEffects';
+import { OfferingSheet } from './offerings/OfferingSheet';
 import { AartiThaliButton, OfferingRail, OfflineBanner, type RailAction, SpecialActions, TithiStrip } from './SceneControls';
 import { TodayDarshanGlow } from './TodayDarshanGlow';
 import { TopBar } from './TopBar';
@@ -55,6 +62,15 @@ export function MandirHome() {
   // VM-01 first visit of the day: shankh + glow once the scene is on screen.
   const firstVisit = useFirstVisitOfDay(data?.today.localDate, focused && !!layout && !!deity);
 
+  // VM-05 offerings (§3.2, §4.4)
+  const offerings = useDeityOfferings(deity?.id);
+  const { sheet, coinsNeeded, pendingItemId, active, lastOffered, openSheet, closeSheet, hideCoinsNeeded } = useOfferingStore();
+  const { offer } = useOfferingFlow({ deityId: deity?.id, balance: data?.coins.balance, today: todayOfferings, offline });
+  const shownToday =
+    todayOfferings &&
+    displayTodayOfferings(todayOfferings, active && active.deityId === deity?.id ? { kind: active.item.kind, before: active.before } : null);
+  const sprites = offerings.data || (deity && lastOffered[deity.id]) ? feetSprites(offerings.data, deity ? lastOffered[deity.id] : undefined) : null;
+
   if (!enabled) return <StatusView state="message" message={t('mandir.disabled')} />;
   if (!data && home.isError) return <StatusView state="error" error={home.error} onRetry={() => void home.refetch()} />;
 
@@ -88,9 +104,13 @@ export function MandirHome() {
     if (e.nativeEvent.actionName === 'decrement') switchBy(-1);
   };
 
+  const openOfferings = (kind: OfferingKind) => {
+    track('offering_sheet_opened', { kind });
+    openSheet(kind);
+  };
   const onRail = (action: RailAction) => {
     if (action === 'SANGRAH') openSangrah();
-    else comingSoon(); // VM-05 offering sheet (T12)
+    else openOfferings(action);
   };
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -128,19 +148,21 @@ export function MandirHome() {
                 layout={layout}
                 theme={data?.theme ?? null}
                 deity={deity}
-                todayOfferings={todayOfferings}
+                todayOfferings={shownToday}
                 variant={variant}
                 loading={loading}
+                feetSprites={sprites}
               />
               </View>
             </GestureDetector>
+            <OfferingEffects layout={layout} deity={deity} />
             {firstVisit && <TodayDarshanGlow layout={layout} onDone={dismissGreetingGlow} />}
             <TithiStrip layout={layout} text={data?.today.tithiText} />
             {offline && <OfflineBanner layout={layout} />}
             <Bells layout={layout} disabled={loading} onRing={ringBell} />
             <OfferingRail layout={layout} disabled={loading} offeringsEnabled={offeringsEnabled} onPress={onRail} />
             <AartiThaliButton layout={layout} thali={data?.thali} disabled={loading} onPress={comingSoon} />
-            <SpecialActions layout={layout} deity={deity} disabled={loading} onSpecial={comingSoon} onListen={comingSoon} />
+            <SpecialActions layout={layout} deity={deity} disabled={loading} onSpecial={() => openOfferings('SPECIAL')} onListen={comingSoon} />
             {data && !deity && (
               <View style={styles.empty}>
                 <AppText variant="bodyLarge" style={styles.emptyText}>
@@ -154,6 +176,19 @@ export function MandirHome() {
           </>
         )}
       </View>
+      {sheet && deity && (
+        <OfferingSheet
+          kind={sheet}
+          query={offerings}
+          balance={data?.coins.balance}
+          pendingItemId={pendingItemId}
+          onOffer={offer}
+          onClose={closeSheet}
+        />
+      )}
+      {coinsNeeded && (
+        <CoinsNeededSheet short={coinsShort(coinsNeeded.required, coinsNeeded.balance)} balance={coinsNeeded.balance} onClose={hideCoinsNeeded} />
+      )}
     </View>
   );
 }
